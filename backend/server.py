@@ -21,6 +21,8 @@ from ai_narrator import AINarrator
 from pterodactyl_ws import PterodactylWSConsumer
 from routes.factions import init_faction_routes
 from routes.gamemaster import init_gm_routes
+from routes.world import init_world_routes
+from routes.economy import init_economy_routes
 from scheduler import Scheduler
 
 # Logging
@@ -691,6 +693,13 @@ async def startup():
     await db.gm_action_log.create_index([('timestamp', -1)])
     await db.gm_broadcasts.create_index([('timestamp', -1)])
 
+    # Economy indexes
+    await db.trades.create_index('trade_id', unique=True)
+    await db.trades.create_index([('status', 1), ('created_at', -1)])
+    await db.supply_requests.create_index('request_id', unique=True)
+    await db.supply_requests.create_index([('status', 1)])
+    await db.resource_scarcity.create_index('name', unique=True)
+
 @app.on_event('shutdown')
 async def shutdown():
     ptero_ws.stop()
@@ -707,3 +716,11 @@ app.include_router(faction_router)
 # Game Master routes
 gm_router = init_gm_routes(db, get_current_user, ptero)
 app.include_router(gm_router)
+
+# World state routes
+world_router = init_world_routes(db, get_current_user, ptero_ws)
+app.include_router(world_router)
+
+# Economy routes
+economy_router = init_economy_routes(db, get_current_user)
+app.include_router(economy_router)

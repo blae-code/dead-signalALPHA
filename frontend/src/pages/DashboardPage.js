@@ -3,6 +3,7 @@ import { useAuth } from '@/App';
 import api from '@/lib/api';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import ServerStatus from '@/components/ServerStatus';
+import WorldConditions from '@/components/WorldConditions';
 import EventFeed from '@/components/EventFeed';
 import NarrativePanel from '@/components/NarrativePanel';
 import RconConsole from '@/components/RconConsole';
@@ -11,9 +12,10 @@ import PlayerRoster from '@/components/PlayerRoster';
 import KeyManagement from '@/components/KeyManagement';
 import FactionPanel from '@/components/FactionPanel';
 import GameMasterPanel from '@/components/GameMasterPanel';
+import ResourceHub from '@/components/ResourceHub';
 import { useServerWebSocket } from '@/hooks/useServerWebSocket';
 import {
-  Radio, Activity, Terminal, Map, Shield, LogOut, User, ChevronDown, Users, Wifi, WifiOff, Swords, Crosshair,
+  Radio, Activity, Terminal, Map, Shield, LogOut, User, ChevronDown, Users, Wifi, WifiOff, Swords, Crosshair, Package,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -205,6 +207,13 @@ export default function DashboardPage() {
             >
               <Swords className="w-3 h-3 mr-2" /> Factions
             </TabsTrigger>
+            <TabsTrigger
+              data-testid="tab-economy"
+              value="economy"
+              className="rounded-none font-heading uppercase tracking-widest text-xs data-[state=active]:bg-[#c4841d]/10 data-[state=active]:text-[#c4841d] data-[state=active]:border-b-2 data-[state=active]:border-[#c4841d] text-[#88837a] hover:text-[#d4cfc4] px-4 py-2"
+            >
+              <Package className="w-3 h-3 mr-2" /> Economy
+            </TabsTrigger>
             {isAdmin && (
               <TabsTrigger
                 data-testid="tab-gm"
@@ -228,15 +237,14 @@ export default function DashboardPage() {
           {/* Overview Tab */}
           <TabsContent value="overview" className="mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1 space-y-4">
                 <ServerStatus data={serverData} liveStats={liveStats} liveState={currentState} onRefresh={fetchServer} isAdmin={isAdmin} onlineCount={onlineCount} />
+                <WorldConditions />
               </div>
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 space-y-4">
                 <EventFeed events={allEvents} onRefresh={fetchEvents} serverOffline={currentState === 'offline' || currentState === 'stopped'} />
+                <NarrativePanel events={allEvents} liveNarrations={liveNarrations} isAdmin={isAdmin} />
               </div>
-            </div>
-            <div className="mt-4">
-              <NarrativePanel events={allEvents} liveNarrations={liveNarrations} isAdmin={isAdmin} />
             </div>
           </TabsContent>
 
@@ -258,6 +266,11 @@ export default function DashboardPage() {
           {/* Factions Tab */}
           <TabsContent value="factions" className="mt-0">
             <FactionPanel user={user} />
+          </TabsContent>
+
+          {/* Economy Tab */}
+          <TabsContent value="economy" className="mt-0">
+            <ResourceHub user={user} />
           </TabsContent>
 
           {/* Game Master Tab */}
