@@ -1,66 +1,70 @@
 # Dead Signal - Product Requirements Document
 
 ## Original Problem Statement
-AI-narrated companion app for HumanitZ 24-player survival sandbox. Military ops center dashboard with server management, real-time event streaming, AI narration with in-game broadcasting, auth key system, faction metagame, and comprehensive Game Master controls.
+AI-narrated companion app for HumanitZ survival sandbox. Military ops center dashboard with server management, real-time event streaming, AI narration with in-game broadcasting, auth key system, faction metagame, comprehensive Game Master controls, immersive world conditions, and scarcity economy.
 
 ## Architecture
-- **Frontend**: React + Tailwind CSS + Shadcn UI (dark tactical theme)
+- **Frontend**: React + Tailwind CSS + Shadcn UI (dark tactical theme, 8 tabs)
 - **Backend**: FastAPI (Python) with async endpoints + WebSocket + Background Scheduler
-- **Database**: MongoDB
+- **Database**: MongoDB (18 collections)
 - **AI**: Gemini 2.5 Flash via Emergent Universal Key
-- **Game Integration**: Pterodactyl Client API + WebSocket console stream + RCON
-- **Auth**: Universal Auth Key system (Callsign + DS-XXXX key), JWT cookies (secure=True, samesite=none)
+- **Game Integration**: Pterodactyl Client API + WebSocket + RCON
+- **Auth**: Universal Auth Key system (Callsign + DS-XXXX key), JWT cookies
 
 ## What's Been Implemented
 
-### Phase 1 (Complete)
-- [x] Universal Callsign + Auth Key authentication
-- [x] First-time setup flow, key management (generate, reissue, revoke, suspend, delete)
-- [x] Role-based access control (system_admin, server_admin, player)
-- [x] Pterodactyl Client API + WebSocket console streaming + RCON
-- [x] Live server stats (CPU, RAM, disk, player count 0/12)
-- [x] Log parser, real-time event broadcasting
-- [x] Gemini 2.5 Flash AI narrator
-- [x] CRT scanline overlay, dark tactical theme
-- [x] Graceful offline state handling
+### Phase 1: Core Platform (Complete)
+- [x] Auth Key system, RBAC, key management
+- [x] Pterodactyl API + WebSocket console + RCON
+- [x] Live server stats, player count (0/12)
+- [x] Event parser, AI narrator (Gemini 2.5 Flash)
+- [x] Graceful offline handling, CRT tactical theme
 
 ### Phase 2: Faction System (Complete)
-- [x] Faction CRUD, membership, promote/demote/transfer
-- [x] Diplomacy engine (Alliance, Trade, Non-Aggression, War treaties)
+- [x] Faction CRUD, membership, leadership
+- [x] Diplomacy engine (4 treaty types)
 
 ### Phase 2.5: Game Master Suite (Complete)
-- [x] Scheduler engine (automated restarts, broadcasts, commands, backups)
-- [x] Broadcast system with RCON + quick templates + history
-- [x] Player admin (kick/ban/warn/whitelist, notes, profiles, action history)
-- [x] Event triggers (auto-fire on game events with cooldowns)
-- [x] Quick commands, action log, GM dashboard stats
+- [x] Scheduler engine, broadcast system, player admin
+- [x] Event triggers, quick commands, action log
 
-### Phase 2.6: Narrative In-Game Broadcasting (Complete - April 3, 2026)
-- [x] **Manual broadcast**: "In-Game" button on each narration in dispatch archive (hover to reveal, click to send via RCON)
-- [x] **Auto-broadcast toggle**: GM Overview setting to auto-send all AI narrations in-game
-- [x] **"Sent" indicator**: Green checkmark + "SENT" badge on broadcast dispatches
-- [x] **In-game formatting**: Narrations prefixed with [DEAD SIGNAL], truncated to 200 chars for RCON
-- [x] **Audit trail**: All broadcasts logged to GM action log
+### Phase 3: Narrative Broadcasting (Complete)
+- [x] Manual In-Game send on each narration
+- [x] Auto-broadcast toggle in GM panel
+- [x] RCON integration for AI dispatches
 
-## Dashboard Tabs (7)
-1. Overview — Server stats, event feed, AI narrations (with In-Game send buttons)
+### Phase 4: Immersive World & Economy (Complete - April 3, 2026)
+- [x] **World Conditions**: Time of day (calculated from uptime), weather (season-aware auto-cycle), season, temperature, danger level (0-10)
+- [x] **Gameplay Tooltips**: Every condition has a hover tooltip explaining gameplay impact (zombie aggression, visibility, food spoilage, etc.)
+- [x] **Day Cycle Visualization**: 24h progress bar with night zone highlighting
+- [x] **GM Weather Override**: Admin can force weather, time offset, custom alerts
+- [x] **Resource Catalog**: 25 HumanitZ items across 11 categories with rarity and base values
+- [x] **Scarcity Index**: Supply levels and value trends for all resources
+- [x] **Trade Board**: Post/claim/complete/cancel trades between players, faction tag display
+- [x] **Supply Requests**: Request items with priority (low/normal/urgent), fulfill system
+- [x] **Crafting Planner**: 10 recipes with ingredients, difficulty, expandable details, category filters
+- [x] **Trade Protocol Guide**: Step-by-step trading instructions in UI
+
+## Dashboard Tabs (8)
+1. Overview — Server stats + World Conditions + Event Feed + AI Dispatch
 2. Console — RCON console
 3. Tactical Map — Grid map placeholder
 4. Players — Player roster
 5. Factions — Faction management + diplomacy
-6. Game Master — 7 sub-tabs (Overview + auto-broadcast toggle, Scheduler, Broadcasts, Player Admin, Triggers, Quick Cmds, Action Log)
-7. Admin — File browser, backups, key management
+6. Economy — Trade Board, Supply Requests, Crafting Planner, Scarcity Index
+7. Game Master — Scheduler, Broadcasts, Player Admin, Triggers, Quick Cmds, Action Log (admin-only)
+8. Admin — File browser, backups, key management (admin-only)
 
 ## Prioritized Backlog
 
-### P0 (Next)
-- Parse HumanitZ-specific connect/disconnect log patterns for live player list
-- Scarcity economy (resource tracking, dynamic pricing, marketplace)
-
-### P1
+### P1 (Next)
 - Interactive territory map with faction overlays
-- AI Diplomat agent (Gemini) for faction negotiation
-- Discord webhook broadcaster
+- AI Diplomat agent for faction negotiation
+- Discord webhook broadcaster for AI narratives
 
-### P2
-- LiveKit voice, TTS narration, key distribution URLs, mobile polish
+### P2 (Future)
+- LiveKit voice channels
+- OpenAI Whisper STT
+- TTS narration
+- Key distribution URLs
+- Mobile responsive polish
