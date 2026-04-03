@@ -3,8 +3,9 @@ import api from '@/lib/api';
 import { Users, Clock, UserCheck, UserX, RefreshCw } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-export default function PlayerRoster({ onlinePlayers, isAdmin }) {
+export default function PlayerRoster({ isAdmin }) {
   const [sessions, setSessions] = useState([]);
+  const [onlineList, setOnlineList] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const fetchPlayers = async () => {
@@ -12,6 +13,7 @@ export default function PlayerRoster({ onlinePlayers, isAdmin }) {
     try {
       const { data } = await api.get('/players');
       setSessions(data.recent_sessions || []);
+      setOnlineList(data.online || []);
     } catch { /* graceful */ }
     setLoading(false);
   };
@@ -42,8 +44,8 @@ export default function PlayerRoster({ onlinePlayers, isAdmin }) {
     } catch { /* graceful */ }
   };
 
-  // Merge WS online data with DB sessions
-  const onlineNames = new Set((onlinePlayers || []).map((p) => (typeof p === 'string' ? p : p.name)));
+  // Use fetched online data
+  const onlineNames = new Set(onlineList.map((p) => (typeof p === 'string' ? p : p.name)));
 
   return (
     <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg" data-testid="player-roster-panel">

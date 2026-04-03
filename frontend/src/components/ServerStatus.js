@@ -4,7 +4,7 @@ import {
   Cpu, HardDrive, MemoryStick, Power, RotateCcw, Square, Zap, RefreshCw, WifiOff,
 } from 'lucide-react';
 
-export default function ServerStatus({ data, liveStats, liveState, onRefresh, isAdmin }) {
+export default function ServerStatus({ data, liveStats, liveState, onRefresh, isAdmin, onlineCount }) {
   const [powerLoading, setPowerLoading] = useState('');
 
   const res = data?.resources?.attributes;
@@ -102,6 +102,16 @@ export default function ServerStatus({ data, liveStats, liveState, onRefresh, is
                 <span className="text-xs font-mono text-[#d4cfc4] truncate ml-2">{det.name}</span>
               </div>
             )}
+
+            {/* Player count */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono uppercase tracking-widest text-[#88837a]">Players</span>
+              <span className={`text-sm font-heading uppercase tracking-wider font-bold ${
+                (onlineCount || 0) > 0 ? 'text-[#6b7a3d]' : 'text-[#88837a]'
+              }`}>
+                {onlineCount ?? 0} / 12
+              </span>
+            </div>
 
             {/* Offline banner */}
             {isOffline && (

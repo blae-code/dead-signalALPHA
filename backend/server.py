@@ -19,6 +19,7 @@ from pterodactyl import PterodactylClient
 from event_parser import parse_log_line
 from ai_narrator import AINarrator
 from pterodactyl_ws import PterodactylWSConsumer
+from routes.factions import init_faction_routes
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -614,9 +615,22 @@ async def startup():
     asyncio.create_task(ptero_ws.run())
     logger.info('Dead Signal backend online — Pterodactyl WS consumer started')
 
+    # Faction indexes
+    await db.factions.create_index('faction_id', unique=True)
+    await db.factions.create_index('status')
+    await db.faction_members.create_index([('faction_id', 1), ('user_id', 1)])
+    await db.faction_members.create_index([('user_id', 1), ('status', 1)])
+    await db.faction_invites.create_index([('user_id', 1), ('status', 1)])
+    await db.diplomacy.create_index('treaty_id', unique=True)
+    await db.diplomacy.create_index([('from_faction_id', 1), ('to_faction_id', 1)])
+
 @app.on_event('shutdown')
 async def shutdown():
     ptero_ws.stop()
     mongo_client.close()
 
 app.include_router(api_router)
+
+# Faction routes
+faction_router = init_faction_routes(db, get_current_user)
+app.include_router(faction_router)

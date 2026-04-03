@@ -9,9 +9,10 @@ import RconConsole from '@/components/RconConsole';
 import GridMap from '@/components/GridMap';
 import PlayerRoster from '@/components/PlayerRoster';
 import KeyManagement from '@/components/KeyManagement';
+import FactionPanel from '@/components/FactionPanel';
 import { useServerWebSocket } from '@/hooks/useServerWebSocket';
 import {
-  Radio, Activity, Terminal, Map, Shield, LogOut, User, ChevronDown, Users, Wifi, WifiOff,
+  Radio, Activity, Terminal, Map, Shield, LogOut, User, ChevronDown, Users, Wifi, WifiOff, Swords,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -25,6 +26,15 @@ export default function DashboardPage() {
   const [backups, setBackups] = useState([]);
   const [files, setFiles] = useState([]);
   const [filePath, setFilePath] = useState('/');
+  const [onlineCount, setOnlineCount] = useState(0);
+
+  // Fetch online player count
+  const fetchOnlineCount = useCallback(async () => {
+    try {
+      const { data } = await api.get('/players');
+      setOnlineCount(data.online_count || 0);
+    } catch { /* graceful */ }
+  }, []);
 
   const fetchServer = useCallback(async () => {
     try {
@@ -58,10 +68,12 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchServer();
     fetchEvents();
-    const si = setInterval(fetchServer, 60000); // Slower poll since WS provides live data
+    fetchOnlineCount();
+    const si = setInterval(fetchServer, 60000);
     const ei = setInterval(fetchEvents, 30000);
-    return () => { clearInterval(si); clearInterval(ei); };
-  }, [fetchServer, fetchEvents]);
+    const pi = setInterval(fetchOnlineCount, 15000);
+    return () => { clearInterval(si); clearInterval(ei); clearInterval(pi); };
+  }, [fetchServer, fetchEvents, fetchOnlineCount]);
 
   // Merge live events with fetched events, deduplicate by timestamp
   const allEvents = useMemo(() => {
@@ -185,6 +197,13 @@ export default function DashboardPage() {
             >
               <Users className="w-3 h-3 mr-2" /> Players
             </TabsTrigger>
+            <TabsTrigger
+              data-testid="tab-factions"
+              value="factions"
+              className="rounded-none font-heading uppercase tracking-widest text-xs data-[state=active]:bg-[#c4841d]/10 data-[state=active]:text-[#c4841d] data-[state=active]:border-b-2 data-[state=active]:border-[#c4841d] text-[#88837a] hover:text-[#d4cfc4] px-4 py-2"
+            >
+              <Swords className="w-3 h-3 mr-2" /> Factions
+            </TabsTrigger>
             {isAdmin && (
               <TabsTrigger
                 data-testid="tab-admin"
@@ -200,7 +219,7 @@ export default function DashboardPage() {
           <TabsContent value="overview" className="mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-1">
-                <ServerStatus data={serverData} liveStats={liveStats} liveState={currentState} onRefresh={fetchServer} isAdmin={isAdmin} />
+                <ServerStatus data={serverData} liveStats={liveStats} liveState={currentState} onRefresh={fetchServer} isAdmin={isAdmin} onlineCount={onlineCount} />
               </div>
               <div className="lg:col-span-2">
                 <EventFeed events={allEvents} onRefresh={fetchEvents} serverOffline={currentState === 'offline' || currentState === 'stopped'} />
@@ -223,7 +242,12 @@ export default function DashboardPage() {
 
           {/* Players Tab */}
           <TabsContent value="players" className="mt-0">
-            <PlayerRoster onlinePlayers={Object.keys(liveStats?.minecraft_stats?.data?.players || {}).length > 0 ? [] : []} isAdmin={isAdmin} />
+            <PlayerRoster isAdmin={isAdmin} />
+          </TabsContent>
+
+          {/* Factions Tab */}
+          <TabsContent value="factions" className="mt-0">
+            <FactionPanel user={user} />
           </TabsContent>
 
           {/* Admin Tab */}
