@@ -96,12 +96,30 @@ class PterodactylWSConsumer:
             from ai_narrator import AINarrator
             n = AINarrator()
             narration = await n.narrate_event(event)
+            now = datetime.now(timezone.utc).isoformat()
             doc = {
                 'event': event,
                 'narration': narration,
                 'type': 'auto_narration',
-                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'broadcast': False,
+                'timestamp': now,
             }
+
+            # Check if auto-broadcast is enabled
+            setting = await self.db.gm_settings.find_one({'key': 'narrative_auto_broadcast'})
+            if setting and setting.get('value'):
+                # Send narration as in-game message via RCON
+                try:
+                    from pterodactyl import PterodactylClient
+                    p = PterodactylClient()
+                    # Truncate for RCON (keep under ~200 chars)
+                    msg = narration[:200] + '...' if len(narration) > 200 else narration
+                    await p.send_command(f'say [DEAD SIGNAL] {msg}')
+                    doc['broadcast'] = True
+                    logger.info(f'Auto-broadcast narration in-game')
+                except Exception as be:
+                    logger.error(f'Auto-broadcast failed: {be}')
+
             await self.db.narratives.insert_one(doc)
             doc.pop('_id', None)
             await self.ws_manager.broadcast({'type': 'narration', 'data': doc})

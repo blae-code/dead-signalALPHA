@@ -236,7 +236,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="mt-4">
-              <NarrativePanel events={allEvents} liveNarrations={liveNarrations} />
+              <NarrativePanel events={allEvents} liveNarrations={liveNarrations} isAdmin={isAdmin} />
             </div>
           </TabsContent>
 

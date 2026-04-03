@@ -439,7 +439,7 @@ async def add_event(data: EventInput, request: Request):
     await get_current_user(request)
     parsed = parse_log_line(data.raw)
     if parsed:
-        result = await db.events.insert_one(parsed)
+        await db.events.insert_one(parsed)
         # Remove _id for JSON serialization
         parsed.pop('_id', None)
         # Broadcast to websocket clients
@@ -501,6 +501,55 @@ async def narrative_history(request: Request, limit: int = 20):
     await get_current_user(request)
     narrs = await db.narratives.find({}, {'_id': 0}).sort('timestamp', -1).limit(limit).to_list(limit)
     return narrs
+
+@api_router.post('/narrative/broadcast')
+async def broadcast_narration(request: Request):
+    """Manually send a narration text as an in-game message via RCON."""
+    user = await get_current_user(request)
+    if user.get('role') not in ('system_admin', 'server_admin'):
+        raise HTTPException(status_code=403, detail='Admin access required')
+    body = await request.json()
+    text = body.get('text', '').strip()
+    if not text:
+        raise HTTPException(status_code=400, detail='No text to broadcast')
+    msg = text[:200] + '...' if len(text) > 200 else text
+    await ptero.send_command(f'say [DEAD SIGNAL] {msg}')
+    now = datetime.now(timezone.utc).isoformat()
+    await db.gm_action_log.insert_one({
+        'action': 'narrative_broadcast',
+        'details': {'text': msg, 'source': 'manual'},
+        'actor': user.get('callsign', 'Unknown'),
+        'timestamp': now,
+    })
+    return {'message': 'Narration broadcast in-game'}
+
+@api_router.get('/gm/settings/narrative-broadcast')
+async def get_narrative_broadcast_setting(request: Request):
+    user = await get_current_user(request)
+    if user.get('role') not in ('system_admin', 'server_admin'):
+        raise HTTPException(status_code=403, detail='Admin access required')
+    setting = await db.gm_settings.find_one({'key': 'narrative_auto_broadcast'}, {'_id': 0})
+    return {'enabled': setting.get('value', False) if setting else False}
+
+@api_router.post('/gm/settings/narrative-broadcast')
+async def toggle_narrative_broadcast(request: Request):
+    user = await get_current_user(request)
+    if user.get('role') not in ('system_admin', 'server_admin'):
+        raise HTTPException(status_code=403, detail='Admin access required')
+    body = await request.json()
+    enabled = bool(body.get('enabled', False))
+    await db.gm_settings.update_one(
+        {'key': 'narrative_auto_broadcast'},
+        {'$set': {'key': 'narrative_auto_broadcast', 'value': enabled}},
+        upsert=True,
+    )
+    await db.gm_action_log.insert_one({
+        'action': 'toggle_narrative_broadcast',
+        'details': {'enabled': enabled},
+        'actor': user.get('callsign', 'Unknown'),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+    })
+    return {'enabled': enabled}
 
 # ==================== WEBSOCKET ====================
 

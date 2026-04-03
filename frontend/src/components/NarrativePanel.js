@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import api from '@/lib/api';
-import { Radio, Wifi, Sun, Moon, CloudSun, Loader2 } from 'lucide-react';
+import { Radio, Wifi, Sun, Moon, CloudSun, Loader2, Send, Volume2, Check } from 'lucide-react';
 
 function TypewriterText({ text, speed = 25 }) {
   const [displayed, setDisplayed] = useState('');
@@ -30,27 +30,37 @@ function TypewriterText({ text, speed = 25 }) {
   );
 }
 
-export default function NarrativePanel({ events, liveNarrations = [] }) {
+export default function NarrativePanel({ events, liveNarrations = [], isAdmin }) {
   const [dispatches, setDispatches] = useState([]);
   const [loading, setLoading] = useState('');
   const [latestNarration, setLatestNarration] = useState('');
+  const [broadcasting, setBroadcasting] = useState('');
+  const [sent, setSent] = useState(new Set());
 
-  // Show latest live auto-narration
   useEffect(() => {
     if (liveNarrations.length > 0 && liveNarrations[0]?.narration) {
       setLatestNarration(liveNarrations[0].narration);
     }
   }, [liveNarrations]);
 
-  useEffect(() => {
-    loadHistory();
-  }, []);
+  useEffect(() => { loadHistory(); }, []);
 
   const loadHistory = async () => {
     try {
       const { data } = await api.get('/narrative/history?limit=10');
       setDispatches(data);
     } catch { /* graceful */ }
+  };
+
+  const broadcastNarration = async (text, id) => {
+    if (!text) return;
+    setBroadcasting(id);
+    try {
+      await api.post('/narrative/broadcast', { text });
+      setSent((prev) => new Set(prev).add(id));
+      setTimeout(() => setSent((prev) => { const n = new Set(prev); n.delete(id); return n; }), 5000);
+    } catch { /* graceful */ }
+    setBroadcasting('');
   };
 
   const generateRadioReport = async () => {
@@ -100,9 +110,26 @@ export default function NarrativePanel({ events, liveNarrations = [] }) {
         {/* Latest Narration with Typewriter */}
         {latestNarration && (
           <div className="mb-4 p-3 border border-[#2a2520] bg-[#111111]" data-testid="latest-narration">
-            <p className="text-xs font-mono text-[#88837a] mb-2 uppercase tracking-widest">
-              // INCOMING TRANSMISSION
-            </p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-mono text-[#88837a] uppercase tracking-widest">
+                // INCOMING TRANSMISSION
+              </p>
+              {isAdmin && (
+                <button
+                  data-testid="broadcast-latest-narration"
+                  onClick={() => broadcastNarration(latestNarration, 'latest')}
+                  disabled={broadcasting === 'latest'}
+                  className={`flex items-center gap-1 text-[10px] font-mono uppercase tracking-widest border px-2 py-1 transition-all ${
+                    sent.has('latest')
+                      ? 'border-[#6b7a3d] text-[#6b7a3d]'
+                      : 'border-[#c4841d] text-[#c4841d] hover:bg-[#c4841d] hover:text-[#111111]'
+                  } disabled:opacity-50`}
+                >
+                  {sent.has('latest') ? <Check className="w-3 h-3" /> : broadcasting === 'latest' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className="w-3 h-3" />}
+                  {sent.has('latest') ? 'Sent' : 'In-Game'}
+                </button>
+              )}
+            </div>
             <p className="text-sm font-mono text-[#d4cfc4] leading-relaxed italic">
               <TypewriterText text={latestNarration} />
             </p>
@@ -158,12 +185,32 @@ export default function NarrativePanel({ events, liveNarrations = [] }) {
               <p className="text-xs font-mono text-[#88837a]/60 italic">No dispatches in archive. Generate one above.</p>
             ) : (
               dispatches.map((d, i) => (
-                <div key={i} className="p-2 border-l-2 border-[#2a2520] hover:border-[#c4841d] bg-[#111111]/50 transition-colors">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-mono text-[#88837a]">
-                      {new Date(d.timestamp).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, month: 'short', day: 'numeric' })}
-                    </span>
-                    <span className="text-[10px] font-mono text-[#c4841d] uppercase">{d.type?.replace('_', ' ') || 'dispatch'}</span>
+                <div key={i} className="p-2 border-l-2 border-[#2a2520] hover:border-[#c4841d] bg-[#111111]/50 transition-colors group">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-[#88837a]">
+                        {new Date(d.timestamp).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, month: 'short', day: 'numeric' })}
+                      </span>
+                      <span className="text-[10px] font-mono text-[#c4841d] uppercase">{d.type?.replace('_', ' ') || 'dispatch'}</span>
+                      {d.broadcast && (
+                        <span className="text-[10px] font-mono text-[#6b7a3d] border border-[#6b7a3d] px-1">SENT</span>
+                      )}
+                    </div>
+                    {isAdmin && d.narration && (
+                      <button
+                        data-testid={`broadcast-narration-${i}`}
+                        onClick={() => broadcastNarration(d.narration, `hist-${i}`)}
+                        disabled={broadcasting === `hist-${i}`}
+                        className={`flex items-center gap-1 text-[10px] font-mono border px-1.5 py-0.5 transition-all opacity-0 group-hover:opacity-100 ${
+                          sent.has(`hist-${i}`)
+                            ? 'border-[#6b7a3d] text-[#6b7a3d]'
+                            : 'border-[#88837a] text-[#88837a] hover:border-[#c4841d] hover:text-[#c4841d]'
+                        } disabled:opacity-50`}
+                      >
+                        {sent.has(`hist-${i}`) ? <Check className="w-2.5 h-2.5" /> : broadcasting === `hist-${i}` ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Send className="w-2.5 h-2.5" />}
+                        {sent.has(`hist-${i}`) ? 'Sent' : 'In-Game'}
+                      </button>
+                    )}
                   </div>
                   <p className="text-xs font-mono text-[#d4cfc4]/80 leading-relaxed">{d.narration}</p>
                 </div>

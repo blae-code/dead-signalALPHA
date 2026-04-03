@@ -4,7 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Zap, Clock, MessageSquare, Shield, Users, Terminal, AlertTriangle,
   Play, Pause, Trash2, RefreshCw, Plus, Send, Eye, X, ChevronRight,
-  Radio, FileText, Ban, UserCheck, Settings, RotateCcw, HardDrive,
+  Radio, FileText, Ban, UserCheck, Settings, RotateCcw, HardDrive, Volume2,
 } from 'lucide-react';
 
 const ACTION_ICONS = {
@@ -77,6 +77,24 @@ export default function GameMasterPanel() {
 
 // ==================== GM OVERVIEW ====================
 function GMOverview({ stats, onRefresh }) {
+  const [autoBroadcast, setAutoBroadcast] = useState(false);
+  const [toggling, setToggling] = useState(false);
+
+  useEffect(() => {
+    api.get('/gm/settings/narrative-broadcast').then(({ data }) => {
+      setAutoBroadcast(data.enabled);
+    }).catch(() => {});
+  }, []);
+
+  const toggleAutoBroadcast = async () => {
+    setToggling(true);
+    try {
+      const { data } = await api.post('/gm/settings/narrative-broadcast', { enabled: !autoBroadcast });
+      setAutoBroadcast(data.enabled);
+    } catch {}
+    setToggling(false);
+  };
+
   const cards = [
     { label: 'Active Tasks', value: stats.active_tasks ?? 0, icon: <Clock className="w-5 h-5" />, color: '#c4841d' },
     { label: 'Tracked Players', value: stats.tracked_players ?? 0, icon: <Users className="w-5 h-5" />, color: '#6b7a3d' },
@@ -94,7 +112,7 @@ function GMOverview({ stats, onRefresh }) {
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         {cards.map((c, i) => (
           <div key={i} className="border border-[#2a2520] bg-[#1a1a1a]/95 p-4 panel-inset noise-bg">
             <div className="flex items-center gap-2 mb-2" style={{ color: c.color }}>
@@ -104,6 +122,33 @@ function GMOverview({ stats, onRefresh }) {
             <p className="font-heading text-2xl font-bold" style={{ color: c.color }}>{c.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* AI Narrative Auto-Broadcast Toggle */}
+      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Volume2 className={`w-5 h-5 ${autoBroadcast ? 'text-[#6b7a3d]' : 'text-[#88837a]'}`} />
+            <div>
+              <p className="text-xs font-heading uppercase tracking-widest text-[#d4cfc4]">AI Narrative Auto-Broadcast</p>
+              <p className="text-[10px] font-mono text-[#88837a] mt-0.5">
+                When enabled, AI-generated narrations from game events are automatically sent as in-game messages via RCON
+              </p>
+            </div>
+          </div>
+          <button
+            data-testid="toggle-auto-broadcast"
+            onClick={toggleAutoBroadcast}
+            disabled={toggling}
+            className={`relative w-12 h-6 border transition-all ${
+              autoBroadcast ? 'bg-[#6b7a3d]/30 border-[#6b7a3d]' : 'bg-[#111111] border-[#2a2520]'
+            } disabled:opacity-50`}
+          >
+            <div className={`absolute top-0.5 w-5 h-5 transition-all ${
+              autoBroadcast ? 'left-6 bg-[#6b7a3d]' : 'left-0.5 bg-[#88837a]'
+            }`} />
+          </button>
+        </div>
       </div>
     </div>
   );
