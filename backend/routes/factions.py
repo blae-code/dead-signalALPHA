@@ -244,11 +244,19 @@ async def my_invites(request: Request):
     invites = await db.faction_invites.find(
         {'user_id': uid, 'status': 'pending'}, {'_id': 0}
     ).to_list(20)
-    # Enrich with faction name
+    # Batch fetch faction names
+    faction_ids = list(set(inv['faction_id'] for inv in invites))
+    if faction_ids:
+        factions_list = await db.factions.find(
+            {'faction_id': {'$in': faction_ids}}, {'_id': 0, 'faction_id': 1, 'name': 1, 'tag': 1}
+        ).to_list(len(faction_ids))
+        faction_map = {f['faction_id']: f for f in factions_list}
+    else:
+        faction_map = {}
     for inv in invites:
-        faction = await db.factions.find_one({'faction_id': inv['faction_id']}, {'_id': 0, 'name': 1, 'tag': 1})
-        inv['faction_name'] = faction.get('name', '?') if faction else '?'
-        inv['faction_tag'] = faction.get('tag', '?') if faction else '?'
+        f = faction_map.get(inv['faction_id'], {})
+        inv['faction_name'] = f.get('name', '?')
+        inv['faction_tag'] = f.get('tag', '?')
     return invites
 
 @router.post('/invites/{faction_id}/accept')

@@ -43,10 +43,11 @@ api_router = APIRouter(prefix="/api")
 JWT_ALGORITHM = "HS256"
 
 # ==================== CORS ====================
-frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+cors_origins_raw = os.environ.get('CORS_ORIGINS', '*')
+cors_origins = ['*'] if cors_origins_raw == '*' else [o.strip() for o in cors_origins_raw.split(',')]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_url, 'http://localhost:3000'],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -111,8 +112,8 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail='Invalid token')
 
 def set_auth_cookies(response: Response, access: str, refresh: str):
-    response.set_cookie(key='access_token', value=access, httponly=True, secure=False, samesite='lax', max_age=43200, path='/')
-    response.set_cookie(key='refresh_token', value=refresh, httponly=True, secure=False, samesite='lax', max_age=2592000, path='/')
+    response.set_cookie(key='access_token', value=access, httponly=True, secure=True, samesite='none', max_age=43200, path='/')
+    response.set_cookie(key='refresh_token', value=refresh, httponly=True, secure=True, samesite='none', max_age=2592000, path='/')
 
 # ==================== PYDANTIC MODELS ====================
 
