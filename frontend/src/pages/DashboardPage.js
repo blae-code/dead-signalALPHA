@@ -8,6 +8,7 @@ import NarrativePanel from '@/components/NarrativePanel';
 import RconConsole from '@/components/RconConsole';
 import GridMap from '@/components/GridMap';
 import PlayerRoster from '@/components/PlayerRoster';
+import KeyManagement from '@/components/KeyManagement';
 import { useServerWebSocket } from '@/hooks/useServerWebSocket';
 import {
   Radio, Activity, Terminal, Map, Shield, LogOut, User, ChevronDown, Users, Wifi, WifiOff,
@@ -76,7 +77,8 @@ export default function DashboardPage() {
     return merged.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || '')).slice(0, 100);
   }, [liveEvents, events]);
 
-  const isAdmin = user?.role === 'super_admin' || user?.role === 'server_admin';
+  const isAdmin = user?.role === 'system_admin' || user?.role === 'server_admin';
+  const isSystemAdmin = user?.role === 'system_admin';
 
   // Derive current state from WS or API
   const currentState = serverState || serverData?.resources?.attributes?.current_state || 'unknown';
@@ -124,8 +126,8 @@ export default function DashboardPage() {
             <DropdownMenuTrigger asChild>
               <button data-testid="user-menu-button" className="flex items-center gap-2 border border-[#2a2520] px-3 py-1.5 text-xs font-mono text-[#d4cfc4] hover:border-[#c4841d] transition-colors">
                 <User className="w-3 h-3" />
-                <span className="hidden sm:inline">{user?.name || 'Operator'}</span>
-                <span className="text-[#88837a] hidden sm:inline">({user?.role})</span>
+                <span className="hidden sm:inline">{user?.callsign || 'Operator'}</span>
+                <span className="text-[#88837a] hidden sm:inline">({user?.role?.replace('_', ' ')})</span>
                 <ChevronDown className="w-3 h-3 text-[#88837a]" />
               </button>
             </DropdownMenuTrigger>
@@ -312,6 +314,13 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Key Management - System Admin only */}
+              {isSystemAdmin && (
+                <div className="lg:col-span-2 mt-4">
+                  <KeyManagement />
+                </div>
+              )}
             </TabsContent>
           )}
         </Tabs>

@@ -51,25 +51,34 @@ app.add_middleware(
 
 # ==================== AUTH HELPERS ====================
 
+import secrets
+import string
+
+KEY_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
 def get_jwt_secret():
     return os.environ.get('JWT_SECRET', 'fallback-secret-change-me')
 
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+def hash_key(raw: str) -> str:
+    return bcrypt.hashpw(raw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
-def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode('utf-8'), hashed.encode('utf-8'))
+def verify_key(raw: str, hashed: str) -> bool:
+    return bcrypt.checkpw(raw.encode('utf-8'), hashed.encode('utf-8'))
 
-def create_access_token(user_id: str, email: str, role: str) -> str:
+def generate_auth_key() -> str:
+    groups = [''.join(secrets.choice(KEY_CHARS) for _ in range(4)) for _ in range(4)]
+    return f'DS-{"-".join(groups)}'
+
+def create_access_token(user_id: str, callsign: str, role: str) -> str:
     return pyjwt.encode(
-        {'sub': user_id, 'email': email, 'role': role,
-         'exp': datetime.now(timezone.utc) + timedelta(hours=2), 'type': 'access'},
+        {'sub': user_id, 'callsign': callsign, 'role': role,
+         'exp': datetime.now(timezone.utc) + timedelta(hours=12), 'type': 'access'},
         get_jwt_secret(), algorithm=JWT_ALGORITHM
     )
 
 def create_refresh_token(user_id: str) -> str:
     return pyjwt.encode(
-        {'sub': user_id, 'exp': datetime.now(timezone.utc) + timedelta(days=7), 'type': 'refresh'},
+        {'sub': user_id, 'exp': datetime.now(timezone.utc) + timedelta(days=30), 'type': 'refresh'},
         get_jwt_secret(), algorithm=JWT_ALGORITHM
     )
 
@@ -88,8 +97,10 @@ async def get_current_user(request: Request) -> dict:
         user = await db.users.find_one({'_id': ObjectId(payload['sub'])})
         if not user:
             raise HTTPException(status_code=401, detail='User not found')
+        if user.get('status') != 'active':
+            raise HTTPException(status_code=403, detail=f'Account {user.get("status", "inactive")}')
         user['_id'] = str(user['_id'])
-        user.pop('password_hash', None)
+        user.pop('auth_key_hash', None)
         return user
     except pyjwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail='Token expired')
@@ -97,19 +108,22 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail='Invalid token')
 
 def set_auth_cookies(response: Response, access: str, refresh: str):
-    response.set_cookie(key='access_token', value=access, httponly=True, secure=False, samesite='lax', max_age=7200, path='/')
-    response.set_cookie(key='refresh_token', value=refresh, httponly=True, secure=False, samesite='lax', max_age=604800, path='/')
+    response.set_cookie(key='access_token', value=access, httponly=True, secure=False, samesite='lax', max_age=43200, path='/')
+    response.set_cookie(key='refresh_token', value=refresh, httponly=True, secure=False, samesite='lax', max_age=2592000, path='/')
 
 # ==================== PYDANTIC MODELS ====================
 
-class RegisterInput(BaseModel):
-    email: str
-    password: str
-    name: str
+class SetupInput(BaseModel):
+    callsign: str
+    setup_secret: str
 
 class LoginInput(BaseModel):
-    email: str
-    password: str
+    callsign: str
+    auth_key: str
+
+class GenerateKeyInput(BaseModel):
+    callsign: str
+    role: str = 'player'
 
 class PowerAction(BaseModel):
     signal: str
@@ -125,51 +139,89 @@ class EventInput(BaseModel):
 
 # ==================== AUTH ROUTES ====================
 
-@api_router.post('/auth/register')
-async def register(data: RegisterInput, response: Response):
-    email = data.email.lower().strip()
-    if await db.users.find_one({'email': email}):
-        raise HTTPException(status_code=400, detail='Email already registered')
+@api_router.get('/auth/setup-status')
+async def setup_status():
+    """Check if first-time setup is needed."""
+    admin = await db.users.find_one({'role': 'system_admin'})
+    return {'setup_required': admin is None}
+
+@api_router.post('/auth/setup')
+async def setup(data: SetupInput, response: Response):
+    """First-time setup: creates system admin and returns auth key."""
+    admin = await db.users.find_one({'role': 'system_admin'})
+    if admin:
+        raise HTTPException(status_code=400, detail='System already initialized. Setup is locked.')
+
+    expected = os.environ.get('SETUP_SECRET', '')
+    if not expected or data.setup_secret != expected:
+        raise HTTPException(status_code=403, detail='Invalid setup secret')
+
+    callsign = data.callsign.strip()
+    if not callsign or len(callsign) < 2:
+        raise HTTPException(status_code=400, detail='Callsign must be at least 2 characters')
+
+    raw_key = generate_auth_key()
     doc = {
-        'email': email,
-        'password_hash': hash_password(data.password),
-        'name': data.name,
-        'role': 'player',
+        'callsign': callsign,
+        'auth_key_hash': hash_key(raw_key),
+        'role': 'system_admin',
+        'status': 'active',
         'created_at': datetime.now(timezone.utc).isoformat(),
+        'created_by': 'SYSTEM',
+        'last_login': None,
     }
     result = await db.users.insert_one(doc)
     uid = str(result.inserted_id)
-    at = create_access_token(uid, email, 'player')
+
+    at = create_access_token(uid, callsign, 'system_admin')
     rt = create_refresh_token(uid)
     set_auth_cookies(response, at, rt)
-    return {'id': uid, 'email': email, 'name': data.name, 'role': 'player', 'token': at}
+
+    # Write test credentials
+    _write_credentials(callsign, raw_key, 'system_admin')
+
+    logger.info(f'System admin created: {callsign}')
+    return {
+        'id': uid,
+        'callsign': callsign,
+        'role': 'system_admin',
+        'auth_key': raw_key,
+        'message': 'SAVE THIS KEY. It will not be shown again.',
+        'token': at,
+    }
 
 @api_router.post('/auth/login')
 async def login(data: LoginInput, request: Request, response: Response):
-    email = data.email.lower().strip()
-    ident = f"{request.client.host}:{email}"
+    callsign = data.callsign.strip()
+    ident = f"{request.client.host}:{callsign}"
+
     attempts = await db.login_attempts.find_one({'identifier': ident})
     if attempts and attempts.get('count', 0) >= 5:
         lu = attempts.get('locked_until', '')
         if lu and datetime.now(timezone.utc).isoformat() < lu:
             raise HTTPException(status_code=429, detail='Too many attempts. Try again in 15 minutes.')
 
-    user = await db.users.find_one({'email': email})
-    if not user or not verify_password(data.password, user.get('password_hash', '')):
+    user = await db.users.find_one({'callsign': callsign})
+    if not user or not verify_key(data.auth_key, user.get('auth_key_hash', '')):
         await db.login_attempts.update_one(
             {'identifier': ident},
             {'$inc': {'count': 1}, '$set': {'locked_until': (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()}},
             upsert=True,
         )
-        raise HTTPException(status_code=401, detail='Invalid credentials')
+        raise HTTPException(status_code=401, detail='Invalid callsign or auth key')
+
+    if user.get('status') != 'active':
+        raise HTTPException(status_code=403, detail=f'Account {user.get("status", "inactive")}. Contact your system admin.')
 
     await db.login_attempts.delete_one({'identifier': ident})
+    await db.users.update_one({'_id': user['_id']}, {'$set': {'last_login': datetime.now(timezone.utc).isoformat()}})
+
     uid = str(user['_id'])
     role = user.get('role', 'player')
-    at = create_access_token(uid, email, role)
+    at = create_access_token(uid, callsign, role)
     rt = create_refresh_token(uid)
     set_auth_cookies(response, at, rt)
-    return {'id': uid, 'email': email, 'name': user.get('name', ''), 'role': role, 'token': at}
+    return {'id': uid, 'callsign': callsign, 'role': role, 'token': at}
 
 @api_router.post('/auth/logout')
 async def logout(response: Response):
@@ -193,14 +245,122 @@ async def refresh(request: Request, response: Response):
         user = await db.users.find_one({'_id': ObjectId(payload['sub'])})
         if not user:
             raise HTTPException(status_code=401, detail='User not found')
+        if user.get('status') != 'active':
+            raise HTTPException(status_code=403, detail='Account not active')
         uid = str(user['_id'])
-        at = create_access_token(uid, user['email'], user.get('role', 'player'))
+        at = create_access_token(uid, user['callsign'], user.get('role', 'player'))
         set_auth_cookies(response, at, create_refresh_token(uid))
         return {'message': 'Refreshed', 'token': at}
     except pyjwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail='Refresh token expired')
     except pyjwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail='Invalid refresh token')
+
+# ==================== ADMIN KEY MANAGEMENT ====================
+
+@api_router.get('/admin/keys')
+async def list_keys(request: Request):
+    user = await get_current_user(request)
+    if user.get('role') != 'system_admin':
+        raise HTTPException(status_code=403, detail='System admin access required')
+    users = await db.users.find({}, {'auth_key_hash': 0}).sort('created_at', -1).to_list(500)
+    for u in users:
+        u['_id'] = str(u['_id'])
+    return users
+
+@api_router.post('/admin/keys')
+async def generate_key(data: GenerateKeyInput, request: Request, response: Response):
+    user = await get_current_user(request)
+    if user.get('role') != 'system_admin':
+        raise HTTPException(status_code=403, detail='System admin access required')
+
+    callsign = data.callsign.strip()
+    if not callsign or len(callsign) < 2:
+        raise HTTPException(status_code=400, detail='Callsign must be at least 2 characters')
+    if data.role not in ('system_admin', 'server_admin', 'player'):
+        raise HTTPException(status_code=400, detail='Invalid role')
+
+    existing = await db.users.find_one({'callsign': callsign})
+    if existing:
+        raise HTTPException(status_code=400, detail=f'Callsign "{callsign}" already taken')
+
+    raw_key = generate_auth_key()
+    doc = {
+        'callsign': callsign,
+        'auth_key_hash': hash_key(raw_key),
+        'role': data.role,
+        'status': 'active',
+        'created_at': datetime.now(timezone.utc).isoformat(),
+        'created_by': user.get('callsign', 'unknown'),
+        'last_login': None,
+    }
+    result = await db.users.insert_one(doc)
+    return {
+        'id': str(result.inserted_id),
+        'callsign': callsign,
+        'role': data.role,
+        'auth_key': raw_key,
+        'message': 'Key generated. Share it securely — it cannot be recovered.',
+    }
+
+@api_router.post('/admin/keys/{user_id}/reissue')
+async def reissue_key(user_id: str, request: Request):
+    user = await get_current_user(request)
+    if user.get('role') != 'system_admin':
+        raise HTTPException(status_code=403, detail='System admin access required')
+
+    target = await db.users.find_one({'_id': ObjectId(user_id)})
+    if not target:
+        raise HTTPException(status_code=404, detail='User not found')
+
+    raw_key = generate_auth_key()
+    await db.users.update_one(
+        {'_id': ObjectId(user_id)},
+        {'$set': {'auth_key_hash': hash_key(raw_key), 'status': 'active'}},
+    )
+    return {
+        'callsign': target['callsign'],
+        'auth_key': raw_key,
+        'message': 'New key issued. Previous key is now invalid.',
+    }
+
+@api_router.post('/admin/keys/{user_id}/suspend')
+async def suspend_key(user_id: str, request: Request):
+    user = await get_current_user(request)
+    if user.get('role') != 'system_admin':
+        raise HTTPException(status_code=403, detail='System admin access required')
+    if user_id == user.get('_id'):
+        raise HTTPException(status_code=400, detail='Cannot suspend your own account')
+    await db.users.update_one({'_id': ObjectId(user_id)}, {'$set': {'status': 'suspended'}})
+    return {'message': 'Key suspended'}
+
+@api_router.post('/admin/keys/{user_id}/activate')
+async def activate_key(user_id: str, request: Request):
+    user = await get_current_user(request)
+    if user.get('role') != 'system_admin':
+        raise HTTPException(status_code=403, detail='System admin access required')
+    await db.users.update_one({'_id': ObjectId(user_id)}, {'$set': {'status': 'active'}})
+    return {'message': 'Key activated'}
+
+@api_router.post('/admin/keys/{user_id}/revoke')
+async def revoke_key(user_id: str, request: Request):
+    user = await get_current_user(request)
+    if user.get('role') != 'system_admin':
+        raise HTTPException(status_code=403, detail='System admin access required')
+    if user_id == user.get('_id'):
+        raise HTTPException(status_code=400, detail='Cannot revoke your own account')
+    await db.users.update_one({'_id': ObjectId(user_id)}, {'$set': {'status': 'revoked'}})
+    return {'message': 'Key permanently revoked'}
+
+@api_router.delete('/admin/keys/{user_id}')
+async def delete_key(user_id: str, request: Request):
+    user = await get_current_user(request)
+    if user.get('role') != 'system_admin':
+        raise HTTPException(status_code=403, detail='System admin access required')
+    if user_id == user.get('_id'):
+        raise HTTPException(status_code=400, detail='Cannot delete your own account')
+    await db.users.delete_one({'_id': ObjectId(user_id)})
+    return {'message': 'User deleted'}
 
 # ==================== SERVER ROUTES ====================
 
@@ -214,7 +374,7 @@ async def server_status(request: Request):
 @api_router.post('/server/power')
 async def server_power(data: PowerAction, request: Request):
     user = await get_current_user(request)
-    if user.get('role') not in ('super_admin', 'server_admin'):
+    if user.get('role') not in ('system_admin', 'server_admin'):
         raise HTTPException(status_code=403, detail='Admin access required')
     if data.signal not in ('start', 'stop', 'restart', 'kill'):
         raise HTTPException(status_code=400, detail='Invalid power signal')
@@ -223,7 +383,7 @@ async def server_power(data: PowerAction, request: Request):
 @api_router.post('/server/command')
 async def send_command(data: CommandInput, request: Request):
     user = await get_current_user(request)
-    if user.get('role') not in ('super_admin', 'server_admin'):
+    if user.get('role') not in ('system_admin', 'server_admin'):
         raise HTTPException(status_code=403, detail='Admin access required')
     result = await ptero.send_command(data.command)
     await db.command_log.insert_one({
@@ -243,7 +403,7 @@ async def list_files(request: Request, directory: str = '/'):
 @api_router.get('/server/files/contents')
 async def get_file(request: Request, file: str = ''):
     user = await get_current_user(request)
-    if user.get('role') not in ('super_admin', 'server_admin'):
+    if user.get('role') not in ('system_admin', 'server_admin'):
         raise HTTPException(status_code=403, detail='Admin access required')
     return await ptero.get_file_contents(file)
 
@@ -255,7 +415,7 @@ async def list_backups(request: Request):
 @api_router.post('/server/backups')
 async def create_backup(request: Request):
     user = await get_current_user(request)
-    if user.get('role') not in ('super_admin', 'server_admin'):
+    if user.get('role') not in ('system_admin', 'server_admin'):
         raise HTTPException(status_code=403, detail='Admin access required')
     return await ptero.create_backup()
 
@@ -411,43 +571,46 @@ async def console_log(request: Request, limit: int = 100):
 
 # ==================== STARTUP ====================
 
-async def seed_admin():
-    admin_email = os.environ.get('ADMIN_EMAIL', 'admin@deadsignal.com')
-    admin_password = os.environ.get('ADMIN_PASSWORD', 'DeadSignal2024!')
-    existing = await db.users.find_one({'email': admin_email})
-    if not existing:
-        await db.users.insert_one({
-            'email': admin_email,
-            'password_hash': hash_password(admin_password),
-            'name': 'Commander',
-            'role': 'super_admin',
-            'created_at': datetime.now(timezone.utc).isoformat(),
-        })
-        logger.info(f'Admin seeded: {admin_email}')
-    elif not verify_password(admin_password, existing.get('password_hash', '')):
-        await db.users.update_one(
-            {'email': admin_email},
-            {'$set': {'password_hash': hash_password(admin_password)}}
-        )
-        logger.info(f'Admin password updated')
-
+def _write_credentials(callsign, raw_key, role):
     os.makedirs('/app/memory', exist_ok=True)
     with open('/app/memory/test_credentials.md', 'w') as f:
-        f.write(f'# Dead Signal Test Credentials\n\n')
-        f.write(f'## Admin\n- Email: {admin_email}\n- Password: {admin_password}\n- Role: super_admin\n\n')
-        f.write(f'## Auth Endpoints\n- POST /api/auth/register\n- POST /api/auth/login\n- POST /api/auth/logout\n- GET /api/auth/me\n- POST /api/auth/refresh\n')
+        f.write('# Dead Signal Test Credentials\n\n')
+        f.write(f'## System Admin\n- Callsign: {callsign}\n- Auth Key: {raw_key}\n- Role: {role}\n\n')
+        f.write('## Auth Flow\n- GET /api/auth/setup-status — check if setup needed\n')
+        f.write('- POST /api/auth/setup — first-time setup (callsign + setup_secret)\n')
+        f.write('- POST /api/auth/login — login (callsign + auth_key)\n')
+        f.write('- POST /api/auth/logout\n- GET /api/auth/me\n- POST /api/auth/refresh\n\n')
+        f.write(f'## Setup Secret (env): {os.environ.get("SETUP_SECRET", "")}\n')
 
 @app.on_event('startup')
 async def startup():
-    await db.users.create_index('email', unique=True)
+    # Drop old email-based index if exists, create callsign index
+    try:
+        await db.users.drop_index('email_1')
+    except Exception:
+        pass
+    await db.users.create_index('callsign', unique=True)
     await db.login_attempts.create_index('identifier')
     await db.events.create_index([('timestamp', -1)])
     await db.events.create_index('type')
     await db.narratives.create_index([('timestamp', -1)])
     await db.player_sessions.create_index('name')
     await db.player_sessions.create_index([('last_seen', -1)])
-    await seed_admin()
-    # Start Pterodactyl WebSocket consumer in background
+
+    # Check if setup is needed
+    admin = await db.users.find_one({'role': 'system_admin'})
+    if admin:
+        logger.info(f'System admin exists: {admin.get("callsign")}')
+        _write_credentials(admin.get('callsign', '?'), '[HIDDEN - already issued]', 'system_admin')
+    else:
+        logger.info('No system admin found — setup required at /api/auth/setup')
+        os.makedirs('/app/memory', exist_ok=True)
+        with open('/app/memory/test_credentials.md', 'w') as f:
+            f.write('# Dead Signal Test Credentials\n\n')
+            f.write('## SETUP REQUIRED\n')
+            f.write(f'- Setup Secret: {os.environ.get("SETUP_SECRET", "")}\n')
+            f.write('- POST /api/auth/setup with {callsign, setup_secret}\n')
+
     asyncio.create_task(ptero_ws.run())
     logger.info('Dead Signal backend online — Pterodactyl WS consumer started')
 

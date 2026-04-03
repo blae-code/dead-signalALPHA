@@ -49,6 +49,8 @@ class DeadSignalAPITester:
                 response = self.session.get(url, headers=headers)
             elif method.upper() == 'POST':
                 response = self.session.post(url, json=data, headers=headers)
+            elif method.upper() == 'DELETE':
+                response = self.session.delete(url, headers=headers)
             else:
                 self.log_test(test_name, False, f"Unsupported method: {method}")
                 return False, None
@@ -74,20 +76,24 @@ class DeadSignalAPITester:
             return False, None
 
     def test_auth_flow(self):
-        """Test authentication endpoints"""
+        """Test authentication endpoints with new Callsign + Auth Key system"""
         print("\n🔐 Testing Authentication Flow...")
         
-        # Test admin login
+        # Test setup status first
+        self.test_endpoint('GET', '/auth/setup-status', 200, test_name="Setup Status Check")
+        
+        # Test admin login with Callsign + Auth Key
         success, data = self.test_endpoint(
             'POST', '/auth/login', 200,
-            {'email': 'admin@deadsignal.com', 'password': 'DeadSignal2024!'},
-            test_name="Admin Login"
+            {'callsign': 'Commander', 'auth_key': 'DS-NV3F-CQ4Q-STFP-CVGN'},
+            test_name="Admin Login (Commander)"
         )
         
         if success and data and 'token' in data:
             self.admin_token = data['token']
             self.session.headers['Authorization'] = f'Bearer {self.admin_token}'
             print(f"   Admin token acquired: {self.admin_token[:20]}...")
+            print(f"   Admin role: {data.get('role', 'unknown')}")
         else:
             print("   ❌ Failed to get admin token")
             return False
@@ -95,17 +101,17 @@ class DeadSignalAPITester:
         # Test /auth/me with admin token
         self.test_endpoint('GET', '/auth/me', 200, test_name="Get Current User (Admin)")
 
-        # Test registration
-        test_email = f"test_user_{datetime.now().strftime('%H%M%S')}@test.com"
+        # Test player login with Callsign + Auth Key
         success, data = self.test_endpoint(
-            'POST', '/auth/register', 200,
-            {'email': test_email, 'password': 'TestPass123!', 'name': 'Test Player'},
-            test_name="User Registration"
+            'POST', '/auth/login', 200,
+            {'callsign': 'Ghost', 'auth_key': 'DS-HW7V-LL44-3LV2-33TL'},
+            test_name="Player Login (Ghost)"
         )
         
         if success and data and 'token' in data:
             self.player_token = data['token']
             print(f"   Player token acquired: {self.player_token[:20]}...")
+            print(f"   Player role: {data.get('role', 'unknown')}")
         
         # Test logout
         self.test_endpoint('POST', '/auth/logout', 200, test_name="Logout")
@@ -173,6 +179,109 @@ class DeadSignalAPITester:
         # Test event stats
         self.test_endpoint('GET', '/events/stats', 200, test_name="Event Stats")
 
+    def test_admin_key_management(self):
+        """Test admin key management endpoints"""
+        print("\n🔑 Testing Admin Key Management...")
+        
+        if not self.admin_token:
+            print("   ❌ No admin token available")
+            return False
+            
+        self.session.headers['Authorization'] = f'Bearer {self.admin_token}'
+        
+        # Test list keys
+        success, data = self.test_endpoint('GET', '/admin/keys', 200, test_name="List Auth Keys")
+        if success and data:
+            print(f"   Found {len(data)} users in system")
+            for user in data:
+                print(f"   - {user.get('callsign', 'unknown')}: {user.get('role', 'unknown')} ({user.get('status', 'unknown')})")
+        
+        # Test generate new key
+        test_callsign = f"TestUser{datetime.now().strftime('%H%M%S')}"
+        success, data = self.test_endpoint(
+            'POST', '/admin/keys', 200,
+            {'callsign': test_callsign, 'role': 'player'},
+            test_name="Generate New Auth Key"
+        )
+        
+        new_user_id = None
+        if success and data:
+            new_user_id = data.get('id')
+            print(f"   Generated key for {test_callsign}: {data.get('auth_key', 'N/A')}")
+        
+        if new_user_id:
+            # Test reissue key
+            self.test_endpoint(
+                'POST', f'/admin/keys/{new_user_id}/reissue', 200,
+                test_name="Reissue Auth Key"
+            )
+            
+            # Test suspend user
+            self.test_endpoint(
+                'POST', f'/admin/keys/{new_user_id}/suspend', 200,
+                test_name="Suspend User"
+            )
+            
+            # Test activate user
+            self.test_endpoint(
+                'POST', f'/admin/keys/{new_user_id}/activate', 200,
+                test_name="Activate User"
+            )
+            
+            # Test delete user
+            self.test_endpoint(
+                'DELETE', f'/admin/keys/{new_user_id}', 200,
+                test_name="Delete User"
+            )
+        
+        return True
+
+    def test_suspended_user_login(self):
+        """Test that suspended users cannot login"""
+        print("\n🚫 Testing Suspended User Login...")
+        
+        if not self.admin_token:
+            print("   ❌ No admin token available")
+            return False
+            
+        self.session.headers['Authorization'] = f'Bearer {self.admin_token}'
+        
+        # Create a test user
+        test_callsign = f"SuspendTest{datetime.now().strftime('%H%M%S')}"
+        success, data = self.test_endpoint(
+            'POST', '/admin/keys', 200,
+            {'callsign': test_callsign, 'role': 'player'},
+            test_name="Create Test User for Suspension"
+        )
+        
+        if not success or not data:
+            print("   ❌ Failed to create test user")
+            return False
+            
+        test_user_id = data.get('id')
+        test_auth_key = data.get('auth_key')
+        
+        # Suspend the user
+        self.test_endpoint(
+            'POST', f'/admin/keys/{test_user_id}/suspend', 200,
+            test_name="Suspend Test User"
+        )
+        
+        # Try to login with suspended user (should fail)
+        self.test_endpoint(
+            'POST', '/auth/login', 403,
+            {'callsign': test_callsign, 'auth_key': test_auth_key},
+            test_name="Login with Suspended User (should fail)"
+        )
+        
+        # Clean up - delete the test user
+        self.test_endpoint(
+            'DELETE', f'/admin/keys/{test_user_id}', 200,
+            test_name="Cleanup: Delete Test User"
+        )
+        
+        return True
+
     def test_narrative_endpoints(self):
         """Test AI narrative endpoints"""
         print("\n🤖 Testing AI Narrative Endpoints...")
@@ -211,6 +320,8 @@ class DeadSignalAPITester:
         # Test narrative history
         self.test_endpoint('GET', '/narrative/history', 200, test_name="Narrative History")
 
+        return True
+
     def test_unauthorized_access(self):
         """Test endpoints without authentication"""
         print("\n🚫 Testing Unauthorized Access...")
@@ -221,14 +332,14 @@ class DeadSignalAPITester:
         
         # These should all return 401
         endpoints_requiring_auth = [
-            '/auth/me',
-            '/server/status',
-            '/events',
-            '/narrative/radio-report'
+            ('/auth/me', 'GET'),
+            ('/server/status', 'GET'),
+            ('/events', 'GET'),
+            ('/narrative/radio-report', 'POST')
         ]
         
-        for endpoint in endpoints_requiring_auth:
-            self.test_endpoint('GET', endpoint, 401, test_name=f"Unauthorized: {endpoint}")
+        for endpoint, method in endpoints_requiring_auth:
+            self.test_endpoint(method, endpoint, 401, test_name=f"Unauthorized: {method} {endpoint}")
 
     def run_all_tests(self):
         """Run complete test suite"""
@@ -245,6 +356,8 @@ class DeadSignalAPITester:
             # Test other endpoints
             self.test_server_endpoints()
             self.test_event_endpoints()
+            self.test_admin_key_management()
+            self.test_suspended_user_login()
             self.test_narrative_endpoints()
             self.test_unauthorized_access()
             
