@@ -1,58 +1,74 @@
 # Dead Signal - Product Requirements Document
 
 ## Original Problem Statement
-AI-narrated companion app for HumanitZ 24-player survival sandbox. Transforms server management into an immersive military ops center experience with faction politics, scarcity economy, real-time event narration, and admin tools.
+AI-narrated companion app for HumanitZ 24-player survival sandbox. Military ops center dashboard with server management, real-time event streaming, AI narration, and auth key system.
 
 ## Architecture
 - **Frontend**: React + Tailwind CSS + Shadcn UI (dark tactical theme)
-- **Backend**: FastAPI (Python) with async endpoints
-- **Database**: MongoDB (users, events, narratives, command_log)
+- **Backend**: FastAPI (Python) with async endpoints + WebSocket
+- **Database**: MongoDB (users, events, narratives, player_sessions, command_log)
 - **AI**: Gemini 2.5 Flash via Emergent Universal Key
-- **Game Integration**: Pterodactyl Client API for server management
-- **Auth**: JWT with httpOnly cookies + Bearer token fallback
+- **Game Integration**: Pterodactyl Client API + WebSocket console stream
+- **Auth**: Universal Auth Key system (Callsign + DS-XXXX key), JWT cookies
 
 ## User Personas
-- **Server Admin (super_admin)**: Full access to power controls, RCON, files, backups
-- **Server Admin (server_admin)**: Server management without user admin
-- **Faction Leader**: Faction management (Phase 2)
-- **Player**: View dashboard, events, narratives
+- **System Admin**: Full access — server power, RCON, files, backups, key management, app config
+- **Server Admin**: Server management, RCON, player management
+- **Player**: Dashboard view, event feed, narratives, faction features (Phase 2)
 
-## What's Been Implemented (Phase 1 - April 3, 2026)
-- [x] JWT authentication with role-based access (register, login, logout, refresh)
-- [x] Admin seeding (super_admin role)
-- [x] Pterodactyl API integration (server status, power controls, commands, files, backups)
-- [x] Event Engine with log parser (regex-based classification)
-- [x] AI Narrative Layer (Gemini 2.5 Flash): Narrator, Radio Operator, Ambient Dispatches
-- [x] Real-time Dashboard with Overview, Console, Tactical Map, Admin tabs
-- [x] Server Status panel with graceful error handling
-- [x] RCON Command Terminal interface
+## What's Been Implemented (April 3, 2026)
+
+### Auth Key System
+- [x] Universal Callsign + Auth Key authentication (no email needed)
+- [x] First-time setup flow via setup secret (creates system admin)
+- [x] Auth key format: DS-XXXX-XXXX-XXXX-XXXX (never expires)
+- [x] Admin key management: generate, reissue, revoke, suspend, delete
+- [x] Role-based access control (system_admin, server_admin, player)
+- [x] JWT with httpOnly cookies, brute force protection
+
+### Server Integration
+- [x] Pterodactyl Client API (status, power controls, commands, files, backups)
+- [x] Real-time Pterodactyl WebSocket console streaming
+- [x] Live server stats (CPU, RAM, disk) updated via WebSocket every 5s
+- [x] Server state tracking (running/offline)
+
+### Event Engine
+- [x] Log parser with regex patterns (connects, disconnects, deaths, kills, hordes, airdrops)
+- [x] Events stored in MongoDB with severity classification
+- [x] Real-time event broadcasting to connected frontend clients
+- [x] Console output buffering (300 lines)
+
+### AI Narrative Layer
+- [x] Gemini 2.5 Flash: Narrator, Radio Operator, Ambient Dispatches
+- [x] Auto-narration of high-severity events
+- [x] Typewriter animation for narrative display
+- [x] Dispatch archive with history
+
+### Dashboard
+- [x] 5-tab layout: Overview, Console, Tactical Map, Players, Admin
+- [x] Live WebSocket connection with LIVE indicator
+- [x] Server Status with real-time stats + power controls
 - [x] Event Feed with severity-based styling
-- [x] AI Narrative Dispatch panel with typewriter animation
+- [x] RCON Console with live server output + command input
 - [x] Placeholder tactical grid map
-- [x] CRT scanline overlay effect
-- [x] Dark tactical military theme (Barlow Condensed + JetBrains Mono)
-- [x] WebSocket infrastructure for live feed
-- [x] Brute force login protection
-
-## Known Issues
-- Pterodactyl API returns 401: API key may need regeneration in BiSect panel
+- [x] Player Roster (tracked from console events)
+- [x] Admin: File browser, backups, auth key management
+- [x] CRT scanline overlay, amber/rust/olive theme
 
 ## Prioritized Backlog
 
 ### P0 (Next Session)
-- Fix Pterodactyl API authentication (user needs to verify/regenerate API key)
-- Real-time log streaming via Pterodactyl WebSocket
-- Auto-narration of high-severity events
+- Real player list parsing from HumanitZ console
+- Scheduled automated tasks (restarts, broadcasts)
 
 ### P1 (Phase 2)
-- Faction system (CRUD, membership, roles, elections)
+- Faction system (CRUD, membership, roles, elections, territory claims)
 - Diplomacy engine (status tracking, proposals, AI diplomat)
 - Scarcity economy (resource tracking, dynamic pricing, marketplace)
-- Interactive map with FModel-extracted assets
+- Interactive map with FModel-extracted game assets
 
 ### P2 (Phase 3)
 - LiveKit voice integration
 - TTS narration to voice channels
-- NPC voice personas
-- Mobile responsive polish
 - Discord webhook notifications
+- Mobile responsive polish
