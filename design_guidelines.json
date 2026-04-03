@@ -1,0 +1,115 @@
+{
+  "theme": "dark",
+  "archetype": "4_swiss_high_contrast_tactical",
+  "mood": "Military Ops Center / Retro CRT Terminal / Gritty Survival",
+  "colors": {
+    "background_base": "#111111",
+    "background_surface": "#1a1a1a",
+    "background_elevated": "#222222",
+    "primary": "#c4841d",
+    "primary_hover": "#d4944a",
+    "secondary": "#4a5c3a",
+    "secondary_hover": "#6b7a3d",
+    "danger": "#8b3a3a",
+    "danger_hover": "#a94442",
+    "text_primary": "#d4cfc4",
+    "text_muted": "#88837a",
+    "border_default": "#2a2520",
+    "border_focus": "#c4841d",
+    "glow_amber": "rgba(196, 132, 29, 0.4)",
+    "glow_green": "rgba(74, 92, 58, 0.5)"
+  },
+  "typography": {
+    "fonts": {
+      "headings": "'Barlow Condensed', 'Oswald', sans-serif",
+      "body_data": "'JetBrains Mono', 'IBM Plex Mono', monospace"
+    },
+    "hierarchy": {
+      "h1": "text-4xl md:text-5xl font-headings uppercase tracking-widest font-bold",
+      "h2": "text-2xl md:text-3xl font-headings uppercase tracking-wider font-semibold",
+      "h3": "text-xl md:text-2xl font-headings uppercase tracking-wider",
+      "body": "text-sm md:text-base font-body_data leading-relaxed",
+      "labels": "text-xs font-body_data uppercase tracking-[0.2em] text-[#88837a]",
+      "logs": "text-xs font-body_data leading-tight"
+    }
+  },
+  "spacing_and_layout": {
+    "philosophy": "Dense, Control Room Grid. Maximum information density, zero wasted space. Optical alignment to edges.",
+    "grid_system": "grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6",
+    "container_padding": "p-4 md:p-6"
+  },
+  "components": {
+    "panels_cards": {
+      "style": "Retro-Terminal Tactical",
+      "border_radius": "rounded-none",
+      "border": "border border-[#2a2520]",
+      "background": "bg-[#1a1a1a]/95",
+      "shadow": "shadow-[inset_0_0_30px_rgba(0,0,0,0.8)]",
+      "header_style": "border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center"
+    },
+    "buttons": {
+      "style": "Hardware/Analog Switch",
+      "border_radius": "rounded-none",
+      "primary": "border border-[#c4841d] bg-[#c4841d]/10 text-[#c4841d] hover:bg-[#c4841d] hover:text-[#111111] hover:shadow-[0_0_15px_rgba(196,132,29,0.5)] transition-all",
+      "secondary": "border border-[#4a5c3a] bg-[#4a5c3a]/10 text-[#4a5c3a] hover:bg-[#4a5c3a] hover:text-[#111111] transition-all",
+      "danger": "border border-[#8b3a3a] bg-[#8b3a3a]/10 text-[#8b3a3a] hover:bg-[#8b3a3a] hover:text-[#111111] transition-all",
+      "typography": "font-headings uppercase tracking-widest font-bold text-sm"
+    },
+    "inputs": {
+      "border_radius": "rounded-none",
+      "background": "bg-[#111111]",
+      "border": "border border-[#2a2520] focus:border-[#c4841d] focus:ring-1 focus:ring-[#c4841d]",
+      "text": "font-body_data text-[#d4cfc4] placeholder-[#88837a]"
+    }
+  },
+  "visual_effects": {
+    "crt_scanlines": {
+      "description": "Global fixed overlay simulating CRT monitor scanlines.",
+      "implementation": "fixed inset-0 pointer-events-none z-50 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px]"
+    },
+    "crt_flicker": {
+      "description": "Subtle opacity animation on main container to simulate screen refresh.",
+      "implementation": "animate-[flicker_0.15s_infinite]"
+    },
+    "text_glow": {
+      "description": "Used for live status indicators and critical narrative text.",
+      "implementation": "drop-shadow-[0_0_8px_rgba(196,132,29,0.8)]"
+    },
+    "typewriter": {
+      "description": "Animation for incoming AI narrative dispatches.",
+      "implementation": "Use framer-motion staggerChildren or custom React hook to reveal characters sequentially."
+    }
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.unsplash.com/photo-1706277183560-6d26ffbf1c23?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwxfHxwb3N0JTIwYXBvY2FseXB0aWMlMjBzdXJ2aXZhbCUyMGRhcmslMjBsYW5kc2NhcGV8ZW58MHx8fHwxNzc1MjE4MDQ2fDA&ixlib=rb-4.1.0&q=85",
+        "category": "background_hero",
+        "description": "Foggy dark landscape to be used as a heavily darkened, low-opacity background behind the main dashboard or login screen."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1580824469841-49c0f1401393?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwxfHxkYXJrJTIwbWV0YWwlMjB0ZXh0dXJlJTIwZ3J1bmdlfGVufDB8fHx8MTc3NTIxODA2Mnww&ixlib=rb-4.1.0&q=85",
+        "category": "texture_overlay",
+        "description": "Dark grunge metal texture. Blend mode 'multiply' or 'overlay' with 10-20% opacity on sidebars or card backgrounds."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1561816273-56c6232d3990?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAxODF8MHwxfHNlYXJjaHwxfHxtaWxpdGFyeSUyMHJhZGFyJTIwc2NyZWVuJTIwZGFya3xlbnwwfHx8fDE3NzUyMTgwNjJ8MA&ixlib=rb-4.1.0&q=85",
+        "category": "placeholder_map",
+        "description": "Analog radar aesthetic to serve as the background for the placeholder grid map component."
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Strictly adhere to the dark tactical color palette. Do not use generic white or standard gray.",
+    "Import and apply 'Barlow Condensed' for headings and 'JetBrains Mono' for body/data.",
+    "Implement the CRT scanline effect as a global fixed div with pointer-events-none so it sits over the UI.",
+    "Use framer-motion to create a typewriter text effect for the 'AI Narrator Dispatches'.",
+    "All cards/panels MUST use `rounded-none`, have a 1px border (#2a2520), and an inset shadow to look like recessed terminal screens.",
+    "For the Live Server Status and Power Controls, use glowing amber/green/red dots to indicate state.",
+    "The layout must feel like a dense military ops center. Use flex-col and grid heavily. Implement collapsible sidebars for dense rosters.",
+    "All interactive elements MUST include a `data-testid` attribute (e.g., `data-testid='rcon-submit-button'`).",
+    "Ensure input fields have transparent/dark backgrounds with distinct focus states matching the primary amber color.",
+    "Add Phosphor Icons or Lucide-React for technical, sharp iconography.",
+    "Never use `card` components with soft shadows or rounded corners from standard Shadcn defaults. Override them to match this tactical brutalism."
+  ]
+}
