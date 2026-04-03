@@ -20,6 +20,8 @@ from event_parser import parse_log_line
 from ai_narrator import AINarrator
 from pterodactyl_ws import PterodactylWSConsumer
 from routes.factions import init_faction_routes
+from routes.gamemaster import init_gm_routes
+from scheduler import Scheduler
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -615,6 +617,11 @@ async def startup():
     asyncio.create_task(ptero_ws.run())
     logger.info('Dead Signal backend online — Pterodactyl WS consumer started')
 
+    # Start scheduler
+    global scheduler
+    scheduler = Scheduler(db, ptero, ws_manager)
+    await scheduler.start()
+
     # Faction indexes
     await db.factions.create_index('faction_id', unique=True)
     await db.factions.create_index('status')
@@ -624,9 +631,21 @@ async def startup():
     await db.diplomacy.create_index('treaty_id', unique=True)
     await db.diplomacy.create_index([('from_faction_id', 1), ('to_faction_id', 1)])
 
+    # GM indexes
+    await db.scheduled_tasks.create_index('task_id', unique=True)
+    await db.scheduled_tasks.create_index([('enabled', 1), ('next_run', 1)])
+    await db.gm_players.create_index('player_name', unique=True)
+    await db.gm_player_notes.create_index('player_name')
+    await db.gm_triggers.create_index('trigger_id', unique=True)
+    await db.gm_triggers.create_index([('trigger_event', 1), ('enabled', 1)])
+    await db.gm_action_log.create_index([('timestamp', -1)])
+    await db.gm_broadcasts.create_index([('timestamp', -1)])
+
 @app.on_event('shutdown')
 async def shutdown():
     ptero_ws.stop()
+    if 'scheduler' in globals():
+        scheduler.stop()
     mongo_client.close()
 
 app.include_router(api_router)
@@ -634,3 +653,7 @@ app.include_router(api_router)
 # Faction routes
 faction_router = init_faction_routes(db, get_current_user)
 app.include_router(faction_router)
+
+# Game Master routes
+gm_router = init_gm_routes(db, get_current_user, ptero)
+app.include_router(gm_router)

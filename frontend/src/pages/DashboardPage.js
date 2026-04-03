@@ -10,9 +10,10 @@ import GridMap from '@/components/GridMap';
 import PlayerRoster from '@/components/PlayerRoster';
 import KeyManagement from '@/components/KeyManagement';
 import FactionPanel from '@/components/FactionPanel';
+import GameMasterPanel from '@/components/GameMasterPanel';
 import { useServerWebSocket } from '@/hooks/useServerWebSocket';
 import {
-  Radio, Activity, Terminal, Map, Shield, LogOut, User, ChevronDown, Users, Wifi, WifiOff, Swords,
+  Radio, Activity, Terminal, Map, Shield, LogOut, User, ChevronDown, Users, Wifi, WifiOff, Swords, Crosshair,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -206,6 +207,15 @@ export default function DashboardPage() {
             </TabsTrigger>
             {isAdmin && (
               <TabsTrigger
+                data-testid="tab-gm"
+                value="gm"
+                className="rounded-none font-heading uppercase tracking-widest text-xs data-[state=active]:bg-[#c4841d]/10 data-[state=active]:text-[#c4841d] data-[state=active]:border-b-2 data-[state=active]:border-[#c4841d] text-[#88837a] hover:text-[#d4cfc4] px-4 py-2"
+              >
+                <Crosshair className="w-3 h-3 mr-2" /> Game Master
+              </TabsTrigger>
+            )}
+            {isAdmin && (
+              <TabsTrigger
                 data-testid="tab-admin"
                 value="admin"
                 className="rounded-none font-heading uppercase tracking-widest text-xs data-[state=active]:bg-[#c4841d]/10 data-[state=active]:text-[#c4841d] data-[state=active]:border-b-2 data-[state=active]:border-[#c4841d] text-[#88837a] hover:text-[#d4cfc4] px-4 py-2"
@@ -249,6 +259,13 @@ export default function DashboardPage() {
           <TabsContent value="factions" className="mt-0">
             <FactionPanel user={user} />
           </TabsContent>
+
+          {/* Game Master Tab */}
+          {isAdmin && (
+            <TabsContent value="gm" className="mt-0">
+              <GameMasterPanel />
+            </TabsContent>
+          )}
 
           {/* Admin Tab */}
           {isAdmin && (

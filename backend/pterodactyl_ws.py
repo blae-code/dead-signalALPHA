@@ -88,6 +88,9 @@ class PterodactylWSConsumer:
         if event['severity'] in ('critical', 'high'):
             asyncio.create_task(self._auto_narrate(event))
 
+        # Fire event triggers
+        asyncio.create_task(self._fire_triggers(event))
+
     async def _auto_narrate(self, event):
         try:
             from ai_narrator import AINarrator
@@ -104,6 +107,55 @@ class PterodactylWSConsumer:
             await self.ws_manager.broadcast({'type': 'narration', 'data': doc})
         except Exception as e:
             logger.error(f'Auto-narration failed: {e}')
+
+    async def _fire_triggers(self, event):
+        """Execute GM event triggers matching this event type."""
+        try:
+            now = datetime.now(timezone.utc)
+            triggers = await self.db.gm_triggers.find({
+                'trigger_event': event['type'],
+                'enabled': True,
+            }).to_list(20)
+
+            for trigger in triggers:
+                # Check cooldown
+                last_fired = trigger.get('last_fired')
+                cooldown = trigger.get('cooldown_seconds', 0)
+                if last_fired and cooldown > 0:
+                    last_dt = datetime.fromisoformat(last_fired)
+                    if (now - last_dt).total_seconds() < cooldown:
+                        continue
+
+                # Execute trigger action
+                params = trigger.get('params', {})
+                if trigger['action'] == 'broadcast':
+                    msg = params.get('message', '').replace('{player}', ', '.join(event.get('players', ['Unknown'])))
+                    if msg:
+                        from pterodactyl import PterodactylClient
+                        p = PterodactylClient()
+                        await p.send_command(f'say {msg}')
+                elif trigger['action'] == 'command':
+                    cmd = params.get('command', '').replace('{player}', ', '.join(event.get('players', ['Unknown'])))
+                    if cmd:
+                        from pterodactyl import PterodactylClient
+                        p = PterodactylClient()
+                        await p.send_command(cmd)
+
+                # Update trigger stats
+                await self.db.gm_triggers.update_one(
+                    {'trigger_id': trigger['trigger_id']},
+                    {'$set': {'last_fired': now.isoformat()}, '$inc': {'fire_count': 1}}
+                )
+
+                # Log
+                await self.db.gm_action_log.insert_one({
+                    'action': 'trigger_fired',
+                    'details': {'trigger_name': trigger['name'], 'event_type': event['type'], 'players': event.get('players', [])},
+                    'actor': 'TRIGGER',
+                    'timestamp': now.isoformat(),
+                })
+        except Exception as e:
+            logger.error(f'Trigger execution failed: {e}')
 
     async def process_stats(self, stats_json: str):
         try:
