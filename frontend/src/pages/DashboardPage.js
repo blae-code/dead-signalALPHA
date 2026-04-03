@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/App';
 import api from '@/lib/api';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -7,8 +7,10 @@ import EventFeed from '@/components/EventFeed';
 import NarrativePanel from '@/components/NarrativePanel';
 import RconConsole from '@/components/RconConsole';
 import GridMap from '@/components/GridMap';
+import PlayerRoster from '@/components/PlayerRoster';
+import { useServerWebSocket } from '@/hooks/useServerWebSocket';
 import {
-  Radio, Activity, Terminal, Map, Shield, LogOut, User, ChevronDown,
+  Radio, Activity, Terminal, Map, Shield, LogOut, User, ChevronDown, Users, Wifi, WifiOff,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -16,6 +18,7 @@ import {
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
+  const { liveStats, serverState, liveEvents, liveNarrations, consoleLogs, connected } = useServerWebSocket();
   const [serverData, setServerData] = useState(null);
   const [events, setEvents] = useState([]);
   const [backups, setBackups] = useState([]);
@@ -54,12 +57,29 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchServer();
     fetchEvents();
-    const si = setInterval(fetchServer, 30000);
-    const ei = setInterval(fetchEvents, 15000);
+    const si = setInterval(fetchServer, 60000); // Slower poll since WS provides live data
+    const ei = setInterval(fetchEvents, 30000);
     return () => { clearInterval(si); clearInterval(ei); };
   }, [fetchServer, fetchEvents]);
 
+  // Merge live events with fetched events, deduplicate by timestamp
+  const allEvents = useMemo(() => {
+    const seen = new Set();
+    const merged = [];
+    for (const ev of [...liveEvents, ...events]) {
+      const key = `${ev.timestamp}-${ev.raw}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(ev);
+      }
+    }
+    return merged.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || '')).slice(0, 100);
+  }, [liveEvents, events]);
+
   const isAdmin = user?.role === 'super_admin' || user?.role === 'server_admin';
+
+  // Derive current state from WS or API
+  const currentState = serverState || serverData?.resources?.attributes?.current_state || 'unknown';
 
   return (
     <div className="min-h-screen bg-[#111111] flex flex-col" data-testid="dashboard-page">
@@ -76,17 +96,26 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* WS connection indicator */}
+          <div className="hidden md:flex items-center gap-1.5 text-[10px] font-mono">
+            {connected ? (
+              <><Wifi className="w-3 h-3 text-[#6b7a3d]" /><span className="text-[#6b7a3d]">LIVE</span></>
+            ) : (
+              <><WifiOff className="w-3 h-3 text-[#88837a]" /><span className="text-[#88837a]">OFFLINE</span></>
+            )}
+          </div>
+
           {/* Server indicator */}
           <div className="hidden md:flex items-center gap-2 text-xs font-mono">
             <div className={`w-2 h-2 rounded-full ${
-              serverData?.resources?.attributes?.current_state === 'running'
+              currentState === 'running'
                 ? 'bg-[#6b7a3d] pulse-green'
-                : serverData?.resources?.error
+                : currentState === 'offline' || currentState === 'stopped'
                   ? 'bg-[#8b3a3a]'
                   : 'bg-[#88837a]'
             }`} />
             <span className="text-[#88837a]">
-              {serverData?.resources?.attributes?.current_state?.toUpperCase() || 'CHECKING...'}
+              {currentState.toUpperCase()}
             </span>
           </div>
 
@@ -138,6 +167,13 @@ export default function DashboardPage() {
             >
               <Map className="w-3 h-3 mr-2" /> Tactical Map
             </TabsTrigger>
+            <TabsTrigger
+              data-testid="tab-players"
+              value="players"
+              className="rounded-none font-heading uppercase tracking-widest text-xs data-[state=active]:bg-[#c4841d]/10 data-[state=active]:text-[#c4841d] data-[state=active]:border-b-2 data-[state=active]:border-[#c4841d] text-[#88837a] hover:text-[#d4cfc4] px-4 py-2"
+            >
+              <Users className="w-3 h-3 mr-2" /> Players
+            </TabsTrigger>
             {isAdmin && (
               <TabsTrigger
                 data-testid="tab-admin"
@@ -153,25 +189,30 @@ export default function DashboardPage() {
           <TabsContent value="overview" className="mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-1">
-                <ServerStatus data={serverData} onRefresh={fetchServer} isAdmin={isAdmin} />
+                <ServerStatus data={serverData} liveStats={liveStats} liveState={currentState} onRefresh={fetchServer} isAdmin={isAdmin} />
               </div>
               <div className="lg:col-span-2">
-                <EventFeed events={events} onRefresh={fetchEvents} />
+                <EventFeed events={allEvents} onRefresh={fetchEvents} />
               </div>
             </div>
             <div className="mt-4">
-              <NarrativePanel events={events} />
+              <NarrativePanel events={allEvents} liveNarrations={liveNarrations} />
             </div>
           </TabsContent>
 
           {/* Console Tab */}
           <TabsContent value="console" className="mt-0">
-            <RconConsole isAdmin={isAdmin} />
+            <RconConsole isAdmin={isAdmin} consoleLogs={consoleLogs} />
           </TabsContent>
 
           {/* Map Tab */}
           <TabsContent value="map" className="mt-0">
             <GridMap />
+          </TabsContent>
+
+          {/* Players Tab */}
+          <TabsContent value="players" className="mt-0">
+            <PlayerRoster onlinePlayers={Object.keys(liveStats?.minecraft_stats?.data?.players || {}).length > 0 ? [] : []} isAdmin={isAdmin} />
           </TabsContent>
 
           {/* Admin Tab */}

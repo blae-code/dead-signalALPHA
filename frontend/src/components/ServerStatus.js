@@ -4,13 +4,20 @@ import {
   Cpu, HardDrive, MemoryStick, Users, Power, RotateCcw, Square, Zap, RefreshCw,
 } from 'lucide-react';
 
-export default function ServerStatus({ data, onRefresh, isAdmin }) {
+export default function ServerStatus({ data, liveStats, liveState, onRefresh, isAdmin }) {
   const [powerLoading, setPowerLoading] = useState('');
 
   const res = data?.resources?.attributes;
   const det = data?.details?.attributes;
   const hasError = data?.resources?.error || data?.details?.error;
-  const isRunning = res?.current_state === 'running';
+
+  // Prefer live stats from WebSocket, fallback to polled data
+  const cpu = liveStats?.cpu_absolute ?? res?.resources?.cpu_absolute ?? 0;
+  const memBytes = liveStats?.memory_bytes ?? res?.resources?.memory_bytes ?? 0;
+  const diskBytes = liveStats?.disk_bytes ?? res?.resources?.disk_bytes ?? 0;
+  const memLimit = liveStats?.memory_limit_bytes ?? (det?.limits?.memory ? det.limits.memory * 1048576 : 0);
+  const currentState = liveState || res?.current_state || 'unknown';
+  const isRunning = currentState === 'running';
 
   const sendPower = async (signal) => {
     setPowerLoading(signal);
@@ -59,7 +66,7 @@ export default function ServerStatus({ data, onRefresh, isAdmin }) {
               <span className={`text-sm font-heading uppercase tracking-wider font-bold ${
                 isRunning ? 'text-[#6b7a3d]' : 'text-[#a94442]'
               }`}>
-                {res?.current_state || 'Unknown'}
+                {currentState}
               </span>
             </div>
 
@@ -71,20 +78,11 @@ export default function ServerStatus({ data, onRefresh, isAdmin }) {
               </div>
             )}
 
-            {/* Stats */}
+            {/* Stats — using live WS data with API fallback */}
             <div className="space-y-3 pt-2 border-t border-[#2a2520]">
-              <StatBar icon={<Cpu className="w-3.5 h-3.5" />} label="CPU" value={`${(res?.resources?.cpu_absolute || 0).toFixed(1)}%`} pct={res?.resources?.cpu_absolute || 0} color="amber" />
-              <StatBar icon={<MemoryStick className="w-3.5 h-3.5" />} label="RAM" value={formatBytes(res?.resources?.memory_bytes)} pct={det?.limits?.memory ? (res?.resources?.memory_bytes / (det.limits.memory * 1048576)) * 100 : 0} color="amber" />
-              <StatBar icon={<HardDrive className="w-3.5 h-3.5" />} label="Disk" value={formatBytes(res?.resources?.disk_bytes)} pct={det?.limits?.disk ? (res?.resources?.disk_bytes / (det.limits.disk * 1048576)) * 100 : 0} color="green" />
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-[#88837a]">
-                  <Users className="w-3.5 h-3.5" />
-                  <span className="text-xs font-mono uppercase tracking-widest">Players</span>
-                </div>
-                <span className="text-sm font-mono text-[#d4cfc4]">
-                  {res?.resources?.network_rx_bytes !== undefined ? '--' : '--'} / {det?.limits?.players || '?'}
-                </span>
-              </div>
+              <StatBar icon={<Cpu className="w-3.5 h-3.5" />} label="CPU" value={`${cpu.toFixed(1)}%`} pct={cpu} color="amber" />
+              <StatBar icon={<MemoryStick className="w-3.5 h-3.5" />} label="RAM" value={formatBytes(memBytes)} pct={memLimit ? (memBytes / memLimit) * 100 : 0} color="amber" />
+              <StatBar icon={<HardDrive className="w-3.5 h-3.5" />} label="Disk" value={formatBytes(diskBytes)} pct={det?.limits?.disk ? (diskBytes / (det.limits.disk * 1048576)) * 100 : 0} color="green" />
             </div>
           </>
         )}

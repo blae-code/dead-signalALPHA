@@ -13,10 +13,12 @@ from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from typing import Optional, List
 import json
+import asyncio
 
 from pterodactyl import PterodactylClient
 from event_parser import parse_log_line
 from ai_narrator import AINarrator
+from pterodactyl_ws import PterodactylWSConsumer
 
 # Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -362,6 +364,9 @@ class ConnectionManager:
 
 ws_manager = ConnectionManager()
 
+# Pterodactyl WebSocket consumer (uses ws_manager for broadcasting)
+ptero_ws = PterodactylWSConsumer(db, ws_manager)
+
 @app.websocket('/api/ws/feed')
 async def ws_feed(websocket: WebSocket):
     await ws_manager.connect(websocket)
@@ -370,6 +375,39 @@ async def ws_feed(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
+
+# ==================== LIVE DATA ROUTES ====================
+
+@api_router.get('/players')
+async def get_players(request: Request):
+    await get_current_user(request)
+    players = []
+    for name, joined in ptero_ws.online_players.items():
+        players.append({'name': name, 'joined_at': joined})
+    # Also get recent sessions from DB
+    recent = await db.player_sessions.find(
+        {}, {'_id': 0}
+    ).sort('last_seen', -1).limit(50).to_list(50)
+    return {
+        'online': players,
+        'online_count': len(players),
+        'recent_sessions': recent,
+    }
+
+@api_router.get('/server/live-stats')
+async def live_stats(request: Request):
+    await get_current_user(request)
+    return {
+        'stats': ptero_ws.live_stats,
+        'state': ptero_ws.server_state,
+        'online_players': list(ptero_ws.online_players.keys()),
+        'ws_connected': ptero_ws.running,
+    }
+
+@api_router.get('/server/console-log')
+async def console_log(request: Request, limit: int = 100):
+    await get_current_user(request)
+    return ptero_ws.console_buffer[-limit:]
 
 # ==================== STARTUP ====================
 
@@ -406,11 +444,16 @@ async def startup():
     await db.events.create_index([('timestamp', -1)])
     await db.events.create_index('type')
     await db.narratives.create_index([('timestamp', -1)])
+    await db.player_sessions.create_index('name')
+    await db.player_sessions.create_index([('last_seen', -1)])
     await seed_admin()
-    logger.info('Dead Signal backend online')
+    # Start Pterodactyl WebSocket consumer in background
+    asyncio.create_task(ptero_ws.run())
+    logger.info('Dead Signal backend online — Pterodactyl WS consumer started')
 
 @app.on_event('shutdown')
 async def shutdown():
+    ptero_ws.stop()
     mongo_client.close()
 
 app.include_router(api_router)

@@ -30,10 +30,17 @@ function TypewriterText({ text, speed = 25 }) {
   );
 }
 
-export default function NarrativePanel({ events }) {
+export default function NarrativePanel({ events, liveNarrations = [] }) {
   const [dispatches, setDispatches] = useState([]);
   const [loading, setLoading] = useState('');
   const [latestNarration, setLatestNarration] = useState('');
+
+  // Show latest live auto-narration
+  useEffect(() => {
+    if (liveNarrations.length > 0 && liveNarrations[0]?.narration) {
+      setLatestNarration(liveNarrations[0].narration);
+    }
+  }, [liveNarrations]);
 
   useEffect(() => {
     loadHistory();

@@ -3,10 +3,11 @@ import api from '@/lib/api';
 import { Terminal, Send, AlertCircle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-export default function RconConsole({ isAdmin }) {
+export default function RconConsole({ isAdmin, consoleLogs = [] }) {
   const [command, setCommand] = useState('');
   const [history, setHistory] = useState([]);
   const [sending, setSending] = useState(false);
+  const [showLive, setShowLive] = useState(true);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -14,7 +15,7 @@ export default function RconConsole({ isAdmin }) {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [history]);
+  }, [history, consoleLogs]);
 
   const sendCommand = async () => {
     if (!command.trim()) return;
@@ -56,16 +57,38 @@ export default function RconConsole({ isAdmin }) {
             <AlertCircle className="w-3 h-3" /> ADMIN ACCESS REQUIRED
           </span>
         )}
+        {isAdmin && (
+          <button
+            data-testid="toggle-live-console"
+            onClick={() => setShowLive(!showLive)}
+            className={`text-[10px] font-mono px-2 py-0.5 border transition-colors ${
+              showLive ? 'border-[#6b7a3d] text-[#6b7a3d]' : 'border-[#88837a] text-[#88837a]'
+            }`}
+          >
+            {showLive ? 'LIVE FEED ON' : 'LIVE FEED OFF'}
+          </button>
+        )}
       </div>
 
       <ScrollArea className="h-[500px]" ref={scrollRef}>
         <div className="p-4 space-y-1 font-mono text-xs">
           {/* Boot sequence */}
           <p className="text-[#88837a]">Dead Signal Command Terminal v1.0</p>
-          <p className="text-[#88837a]">Connected to server via Pterodactyl relay</p>
-          <p className="text-[#88837a]">Type commands below. Use with caution.</p>
+          <p className="text-[#88837a]">Connected to server via Pterodactyl WebSocket relay</p>
+          <p className="text-[#88837a]">Type commands below. Live console output streams below.</p>
           <p className="text-[#2a2520]">{'='.repeat(60)}</p>
 
+          {/* Live console output from WebSocket */}
+          {showLive && consoleLogs.map((log, i) => (
+            <div key={`live-${i}`} className="flex items-start gap-2">
+              <span className="text-[#88837a] text-[10px] min-w-[65px]">
+                [{new Date(log.timestamp).toLocaleTimeString('en-US', { hour12: false })}]
+              </span>
+              <span className="text-[#88837a]/70">{log.line}</span>
+            </div>
+          ))}
+
+          {/* Command history */}
           {history.map((entry, i) => (
             <div key={i} className="flex items-start gap-2">
               <span className="text-[#88837a] text-[10px] min-w-[65px]">[{entry.time}]</span>
