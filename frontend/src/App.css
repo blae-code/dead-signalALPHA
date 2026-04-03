@@ -1,34 +1,38 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* Dead Signal - Component Styles */
+
+/* Login background */
+.login-bg {
+  background: linear-gradient(180deg, #111111 0%, #0a0a0a 100%);
+  min-height: 100vh;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+/* Terminal typing animation */
+@keyframes typing {
+  from { width: 0; }
+  to { width: 100%; }
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+/* Scan line animation on hover */
+.scan-hover:hover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 0%, rgba(196,132,29,0.03) 50%, transparent 100%);
+  animation: scan 2s linear;
+  pointer-events: none;
 }
 
-.App-link {
-    color: #61dafb;
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Distressed border */
+.border-worn {
+  border-image: repeating-linear-gradient(
+    90deg,
+    #2a2520 0px, #2a2520 4px,
+    transparent 4px, transparent 6px,
+    #2a2520 6px, #2a2520 8px
+  ) 1;
 }

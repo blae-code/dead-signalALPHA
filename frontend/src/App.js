@@ -1,53 +1,91 @@
-import { useEffect } from "react";
-import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import '@/App.css';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import api from '@/lib/api';
+import LoginPage from '@/pages/LoginPage';
+import DashboardPage from '@/pages/DashboardPage';
+import CRTOverlay from '@/components/CRTOverlay';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const AuthContext = createContext(null);
 
-const Home = () => {
-  const helloWorldApi = async () => {
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);      // null = checking
+  const [loading, setLoading] = useState(true);
+
+  const checkAuth = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
+      const { data } = await api.get('/auth/me');
+      setUser(data);
+    } catch {
+      setUser(false);
+    } finally {
+      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
   }, []);
 
+  useEffect(() => { checkAuth(); }, [checkAuth]);
+
+  const login = async (email, password) => {
+    const { data } = await api.post('/auth/login', { email, password });
+    setUser(data);
+    return data;
+  };
+
+  const register = async (email, password, name) => {
+    const { data } = await api.post('/auth/register', { email, password, name });
+    setUser(data);
+    return data;
+  };
+
+  const logout = async () => {
+    await api.post('/auth/logout');
+    setUser(false);
+  };
+
   return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, checkAuth }}>
+      {children}
+    </AuthContext.Provider>
   );
-};
+}
+
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#111111] flex items-center justify-center">
+        <div className="font-heading text-2xl uppercase tracking-widest text-[#c4841d] glow-amber-text">
+          Establishing Signal...
+        </div>
+      </div>
+    );
+  }
+  if (user === false) return <Navigate to="/login" replace />;
+  return children;
+}
 
 function App() {
   return (
-    <div className="App">
-      <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
+        <CRTOverlay />
         <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
-      </BrowserRouter>
-    </div>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 
