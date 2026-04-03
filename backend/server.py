@@ -85,7 +85,7 @@ def _parse_cors_config():
     if raw:
         return [o.strip() for o in raw.split(',') if o.strip()], True
     if APP_ENV == 'production':
-        return [], True
+        return ['https://dead-signal.ca'], True
     return ['http://localhost:3000', 'http://127.0.0.1:3000'], True
 
 
