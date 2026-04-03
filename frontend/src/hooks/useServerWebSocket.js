@@ -5,6 +5,7 @@ export function useServerWebSocket() {
   const [liveStats, setLiveStats] = useState(null);
   const [serverState, setServerState] = useState(null);
   const [liveEvents, setLiveEvents] = useState([]);
+  const [liveIntel, setLiveIntel] = useState([]);
   const [liveNarrations, setLiveNarrations] = useState([]);
   const [consoleLogs, setConsoleLogs] = useState([]);
   const [worldState, setWorldState] = useState(null);
@@ -40,6 +41,9 @@ export function useServerWebSocket() {
               break;
             case 'event':
               setLiveEvents((prev) => [msg.data, ...prev].slice(0, 200));
+              break;
+            case 'intel':
+              setLiveIntel((prev) => [msg.data, ...prev.filter((item) => item.intel_id !== msg.data?.intel_id)].slice(0, 100));
               break;
             case 'narration':
               setLiveNarrations((prev) => [msg.data, ...prev].slice(0, 50));
@@ -85,5 +89,5 @@ export function useServerWebSocket() {
     };
   }, [connect]);
 
-  return { liveStats, serverState, liveEvents, liveNarrations, consoleLogs, worldState, scarcityData, connected };
+  return { liveStats, serverState, liveEvents, liveIntel, liveNarrations, consoleLogs, worldState, scarcityData, connected };
 }

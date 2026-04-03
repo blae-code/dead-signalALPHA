@@ -17,13 +17,17 @@ import asyncio
 from pathlib import Path
 
 from pterodactyl import PterodactylClient
-from event_parser import parse_log_line
+from event_parser import normalize_event, parse_log_line
 from ai_narrator import AINarrator
+from director import DeadSignalDirector
 from pterodactyl_ws import PterodactylWSConsumer
 from routes.factions import init_faction_routes
 from routes.gamemaster import init_gm_routes
 from routes.world import init_world_routes
 from routes.economy import init_economy_routes
+from routes.npcs import init_npc_routes
+from routes.missions import init_mission_routes
+from routes.inventory import init_inventory_routes
 from scheduler import Scheduler
 
 # Logging
@@ -520,6 +524,7 @@ async def build_health_snapshot() -> dict:
     pterodactyl_ready = ptero.configured
     narrator_ready = narrator.configured
     scheduler_running = bool(globals().get('scheduler') and scheduler.running)
+    director_ready = bool(globals().get('director'))
 
     warnings = []
     if not pterodactyl_ready:
@@ -540,6 +545,7 @@ async def build_health_snapshot() -> dict:
             'mongo': mongo,
             'pterodactyl': {'configured': pterodactyl_ready, 'ws_running': ptero_ws.running},
             'ai_narrator': {'configured': narrator_ready},
+            'director': {'configured': director_ready},
             'scheduler': {'running': scheduler_running},
         },
         'runtime': {
@@ -658,13 +664,18 @@ async def get_events(request: Request, limit: int = 50, event_type: Optional[str
 async def add_event(data: EventInput, request: Request):
     await get_current_user(request)
     parsed = parse_log_line(data.raw)
-    if parsed:
-        await db.events.insert_one(parsed)
-        # Remove _id for JSON serialization
-        parsed.pop('_id', None)
-        # Broadcast to websocket clients
-        await ws_manager.broadcast({'type': 'event', 'data': parsed})
-        return parsed
+    if parsed and parsed.get('type') != 'unknown':
+        event = normalize_event(
+            parsed,
+            world_state=await ptero_ws.get_current_world_state(),
+            online_players=ptero_ws.online_players.keys(),
+        )
+        await db.events.insert_one(event)
+        event.pop('_id', None)
+        await ws_manager.broadcast({'type': 'event', 'data': event})
+        if director:
+            asyncio.create_task(director.maybe_issue_event_intel(event))
+        return event
     return {'message': 'Could not parse log line'}
 
 @api_router.get('/events/stats')
@@ -676,6 +687,33 @@ async def event_stats(request: Request):
     ]
     stats = await db.events.aggregate(pipeline).to_list(100)
     return [{'type': s['_id'], 'count': s['count']} for s in stats]
+
+
+@api_router.get('/intel/feed')
+async def intel_feed(request: Request, limit: int = 30, priority: Optional[str] = None, category: Optional[str] = None):
+    await get_current_user(request)
+    limit = clamp_limit(limit, default=30, maximum=100)
+    now = datetime.now(timezone.utc).isoformat()
+    query = {
+        'status': 'active',
+        '$or': [{'expires_at': None}, {'expires_at': {'$gt': now}}],
+    }
+    if priority:
+        if priority not in {'routine', 'priority', 'critical'}:
+            raise HTTPException(status_code=400, detail='Invalid intel priority')
+        query['priority'] = priority
+    if category:
+        if category not in {'combat', 'survival', 'social', 'environment', 'operations'}:
+            raise HTTPException(status_code=400, detail='Invalid intel category')
+        query['category'] = category
+    feed = await db.intel_feed.find(query, {'_id': 0}).sort('created_at', -1).limit(limit).to_list(limit)
+    return feed
+
+
+@api_router.get('/intel/context')
+async def intel_context(request: Request):
+    await get_current_user(request)
+    return await director.build_world_context()
 
 # ==================== NARRATIVE ROUTES ====================
 
@@ -706,8 +744,8 @@ async def radio_report(request: Request):
 @api_router.post('/narrative/ambient')
 async def ambient(request: Request, time_of_day: str = 'dawn'):
     await get_current_user(request)
-    resources = await ptero.get_resources()
-    dispatch = await narrator.ambient_dispatch(time_of_day, {'resources': resources})
+    context = await director.build_world_context()
+    dispatch = await narrator.ambient_dispatch(time_of_day, context)
     await db.narratives.insert_one({
         'narration': dispatch,
         'type': 'ambient',
@@ -799,7 +837,16 @@ class ConnectionManager:
 ws_manager = ConnectionManager()
 
 # Pterodactyl WebSocket consumer (uses ws_manager for broadcasting)
-ptero_ws = PterodactylWSConsumer(db, ws_manager)
+ptero_ws = PterodactylWSConsumer(db, ws_manager, ptero_client=ptero)
+director = DeadSignalDirector(
+    db,
+    ws_manager,
+    ptero_client=ptero,
+    narrator=narrator,
+    world_state_getter=ptero_ws.get_current_world_state,
+    online_players_getter=lambda: list(ptero_ws.online_players.keys()),
+)
+ptero_ws.director = director
 
 @app.websocket('/api/ws/feed')
 async def ws_feed(websocket: WebSocket):
@@ -880,6 +927,8 @@ async def startup():
     await db.login_attempts.create_index('identifier')
     await db.events.create_index([('timestamp', -1)])
     await db.events.create_index('type')
+    await db.events.create_index('event_id')
+    await db.events.create_index([('director_priority', 1), ('timestamp', -1)])
     await db.narratives.create_index([('timestamp', -1)])
     await db.player_sessions.create_index('name')
     await db.player_sessions.create_index([('last_seen', -1)])
@@ -925,13 +974,24 @@ async def startup():
     await db.gm_triggers.create_index([('trigger_event', 1), ('enabled', 1)])
     await db.gm_action_log.create_index([('timestamp', -1)])
     await db.gm_broadcasts.create_index([('timestamp', -1)])
+    await db.intel_feed.create_index('intel_id', unique=True)
+    await db.intel_feed.create_index([('created_at', -1)])
+    await db.intel_feed.create_index([('status', 1), ('priority', 1), ('created_at', -1)])
+    await db.intel_feed.create_index('dedupe_key')
 
     # Economy indexes
     await db.trades.create_index('trade_id', unique=True)
     await db.trades.create_index([('status', 1), ('created_at', -1)])
     await db.supply_requests.create_index('request_id', unique=True)
     await db.supply_requests.create_index([('status', 1)])
+    await db.supply_requests.create_index([('priority', 1), ('created_at', -1)])
     await db.resource_scarcity.create_index('name', unique=True)
+    await db.npcs.create_index('npc_id', unique=True)
+    await db.npcs.create_index([('status', 1), ('updated_at', -1)])
+    await db.npc_events.create_index([('npc_id', 1), ('timestamp', -1)])
+    await db.missions.create_index('mission_id', unique=True)
+    await db.missions.create_index([('status', 1), ('updated_at', -1)])
+    await db.missions.create_index([('assigned_players', 1)])
 
 @app.on_event('shutdown')
 async def shutdown():
@@ -957,3 +1017,15 @@ app.include_router(world_router)
 # Economy routes
 economy_router = init_economy_routes(db, get_current_user)
 app.include_router(economy_router)
+
+# NPC routes
+npc_router = init_npc_routes(db, get_current_user, ptero, ws_manager)
+app.include_router(npc_router)
+
+# Mission routes
+mission_router = init_mission_routes(db, get_current_user, ptero, ws_manager)
+app.include_router(mission_router)
+
+# Inventory / Caches / Bases / Crafting Queue routes
+inventory_router = init_inventory_routes(db, get_current_user)
+app.include_router(inventory_router)

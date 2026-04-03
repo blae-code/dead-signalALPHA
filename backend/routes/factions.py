@@ -547,6 +547,403 @@ async def cancel_treaty(treaty_id: str, request: Request):
     return {'message': 'Treaty cancelled'}
 
 
+# ==================== REPUTATION ====================
+# Each pair of factions has one shared document keyed by sorted faction IDs.
+# Score: -100 (hostile) to +100 (allied).  GM can manually adjust.
+
+REPUTATION_DELTAS = {
+    'alliance_signed': 25,
+    'war_declared': -40,
+    'non_aggression_signed': 10,
+    'trade_signed': 10,
+    'treaty_cancelled': -10,
+    'gm_manual': 0,   # variable — set by caller
+}
+
+
+def _rep_key(a: str, b: str) -> str:
+    return '_'.join(sorted([a, b]))
+
+
+async def _adjust_reputation(faction_a: str, faction_b: str, delta: int, reason: str):
+    """Add `delta` to the reputation score between two factions (clamped -100…100)."""
+    key = _rep_key(faction_a, faction_b)
+    now = datetime.now(timezone.utc).isoformat()
+    doc = await db.faction_reputation.find_one({'pair_key': key})
+    if doc:
+        new_score = max(-100, min(100, doc.get('score', 0) + delta))
+        history = doc.get('history', [])[-19:]  # keep last 20
+        history.append({'delta': delta, 'reason': reason, 'timestamp': now})
+        await db.faction_reputation.update_one(
+            {'pair_key': key},
+            {'$set': {'score': new_score, 'updated_at': now, 'history': history}}
+        )
+    else:
+        score = max(-100, min(100, delta))
+        await db.faction_reputation.insert_one({
+            'pair_key': key,
+            'faction_a_id': sorted([faction_a, faction_b])[0],
+            'faction_b_id': sorted([faction_a, faction_b])[1],
+            'score': score,
+            'history': [{'delta': delta, 'reason': reason, 'timestamp': now}],
+            'updated_at': now,
+        })
+
+
+@router.get('/{faction_id}/reputation')
+async def get_faction_reputation(faction_id: str, request: Request):
+    """Get reputation scores between this faction and all others."""
+    await get_current_user(request)
+    faction = await db.factions.find_one({'faction_id': faction_id, 'status': 'active'})
+    if not faction:
+        raise HTTPException(status_code=404, detail='Faction not found')
+
+    reps = await db.faction_reputation.find(
+        {'$or': [{'faction_a_id': faction_id}, {'faction_b_id': faction_id}]},
+        {'_id': 0}
+    ).to_list(100)
+
+    # Attach faction names for readability
+    other_ids = []
+    for r in reps:
+        other = r['faction_b_id'] if r['faction_a_id'] == faction_id else r['faction_a_id']
+        other_ids.append(other)
+
+    factions_list = await db.factions.find(
+        {'faction_id': {'$in': other_ids}}, {'_id': 0, 'faction_id': 1, 'name': 1, 'tag': 1, 'color': 1}
+    ).to_list(len(other_ids) + 1)
+    faction_map = {f['faction_id']: f for f in factions_list}
+
+    result = []
+    for r in reps:
+        other_id = r['faction_b_id'] if r['faction_a_id'] == faction_id else r['faction_a_id']
+        other_info = faction_map.get(other_id, {})
+        result.append({
+            'other_faction_id': other_id,
+            'other_faction_name': other_info.get('name', '?'),
+            'other_faction_tag': other_info.get('tag', '?'),
+            'other_faction_color': other_info.get('color', '#88837a'),
+            'score': r['score'],
+            'updated_at': r.get('updated_at'),
+            'history': r.get('history', []),
+        })
+    result.sort(key=lambda x: x['score'], reverse=True)
+    return result
+
+
+class ReputationAdjustInput(BaseModel):
+    faction_a_id: str
+    faction_b_id: str
+    delta: int   # -100 to 100
+    reason: str = 'gm_adjustment'
+
+
+@router.post('/reputation/adjust')
+async def adjust_reputation(data: ReputationAdjustInput, request: Request):
+    """GM-only: manually adjust reputation between two factions."""
+    user = await get_current_user(request)
+    if user.get('role') not in ('system_admin', 'server_admin'):
+        raise HTTPException(status_code=403, detail='Admin access required')
+    if data.delta < -100 or data.delta > 100:
+        raise HTTPException(status_code=400, detail='Delta must be between -100 and 100')
+    if data.faction_a_id == data.faction_b_id:
+        raise HTTPException(status_code=400, detail='Cannot set reputation with yourself')
+
+    for fid in (data.faction_a_id, data.faction_b_id):
+        if not await db.factions.find_one({'faction_id': fid, 'status': 'active'}):
+            raise HTTPException(status_code=404, detail=f'Faction {fid} not found')
+
+    reason = (data.reason or 'gm_adjustment').strip()[:100]
+    await _adjust_reputation(data.faction_a_id, data.faction_b_id, data.delta, reason)
+    return {'message': f'Reputation adjusted by {data.delta:+d}'}
+
+
+# Auto-update reputation when treaties are resolved.
+# Monkey-patch the respond_treaty and propose_treaty handlers to call _adjust_reputation.
+# This is done via a thin wrapper registered after the base routes.
+
+@router.post('/diplomacy/{treaty_id}/respond-and-rep')
+async def respond_treaty_with_rep(treaty_id: str, request: Request):
+    """Internal: respond to treaty AND update reputation. Supersedes /respond in client calls."""
+    # Re-use existing logic by calling the actual handler
+    from fastapi import Request as _Req
+    body = await request.json()
+    accept = bool(body.get('accept', False))
+    user = await get_current_user(request)
+    uid = user['_id']
+
+    treaty = await db.diplomacy.find_one({'treaty_id': treaty_id, 'status': 'proposed'})
+    if not treaty:
+        raise HTTPException(status_code=404, detail='Treaty not found or not pending')
+
+    membership = await db.faction_members.find_one(
+        {'faction_id': treaty['to_faction_id'], 'user_id': uid, 'status': 'active'}
+    )
+    if not membership or membership['role'] not in ('leader', 'officer'):
+        raise HTTPException(status_code=403, detail='Only target faction leaders/officers can respond')
+
+    now = datetime.now(timezone.utc).isoformat()
+    new_status = 'active' if accept else 'rejected'
+    await db.diplomacy.update_one({'treaty_id': treaty_id}, {'$set': {'status': new_status, 'resolved_at': now}})
+
+    if accept:
+        delta_map = {'alliance': 25, 'trade': 10, 'non_aggression': 10, 'war': -40}
+        delta = delta_map.get(treaty['treaty_type'], 5)
+        await _adjust_reputation(treaty['from_faction_id'], treaty['to_faction_id'], delta,
+                                  f'{treaty["treaty_type"]}_signed')
+
+    return {'message': f'Treaty {"accepted" if accept else "rejected"}'}
+
+
+# ==================== TERRITORY ====================
+
+TERRITORY_TYPES = {
+    'safe_house', 'supply_depot', 'outpost', 'trading_post',
+    'spawn_point', 'industrial', 'residential', 'military', 'wilderness',
+}
+TERRITORY_STATUSES = {'unclaimed', 'controlled', 'contested', 'destroyed'}
+
+
+class TerritoryInput(BaseModel):
+    name: str
+    territory_type: str
+    location_name: str = ''
+    grid_x: Optional[int] = None
+    grid_y: Optional[int] = None
+    description: str = ''
+    bonuses: List[str] = []
+
+
+class TerritoryUpdate(BaseModel):
+    name: Optional[str] = None
+    territory_type: Optional[str] = None
+    location_name: Optional[str] = None
+    grid_x: Optional[int] = None
+    grid_y: Optional[int] = None
+    description: Optional[str] = None
+    bonuses: Optional[List[str]] = None
+    status: Optional[str] = None
+    controlled_by: Optional[str] = None   # faction_id or null to unclaim
+    notes: Optional[str] = None
+
+
+@router.get('/territories')
+async def list_territories(request: Request, status: Optional[str] = None):
+    """List all territories (visible to all authenticated users)."""
+    await get_current_user(request)
+    query: dict = {}
+    if status:
+        if status not in TERRITORY_STATUSES:
+            raise HTTPException(status_code=400, detail='Invalid status')
+        query['status'] = status
+    territories = await db.territories.find(query, {'_id': 0}).sort('name', 1).to_list(200)
+    return territories
+
+
+@router.post('/territories')
+async def create_territory(data: TerritoryInput, request: Request):
+    """GM only: create a claimable territory."""
+    user = await get_current_user(request)
+    if user.get('role') not in ('system_admin', 'server_admin'):
+        raise HTTPException(status_code=403, detail='Admin access required')
+
+    if data.territory_type not in TERRITORY_TYPES:
+        raise HTTPException(status_code=400, detail=f'Invalid territory_type')
+    name = data.name.strip()
+    if not name or len(name) > 80:
+        raise HTTPException(status_code=400, detail='Name required (max 80 chars)')
+
+    bonuses = [(b.strip()[:120]) for b in (data.bonuses or [])[:10] if b.strip()]
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        'territory_id': str(ObjectId()),
+        'name': name,
+        'territory_type': data.territory_type,
+        'location_name': (data.location_name or '').strip()[:100],
+        'grid_x': data.grid_x,
+        'grid_y': data.grid_y,
+        'description': (data.description or '').strip()[:500],
+        'bonuses': bonuses,
+        'status': 'unclaimed',
+        'controlled_by': None,
+        'controlled_by_name': None,
+        'controlled_by_tag': None,
+        'contested_by': None,
+        'contested_by_name': None,
+        'notes': '',
+        'created_by': user.get('callsign', 'unknown'),
+        'created_at': now,
+        'updated_at': now,
+    }
+    await db.territories.insert_one(doc)
+    doc.pop('_id', None)
+    return doc
+
+
+@router.patch('/territories/{territory_id}')
+async def update_territory(territory_id: str, data: TerritoryUpdate, request: Request):
+    """GM only: update territory details or forcibly set control."""
+    user = await get_current_user(request)
+    if user.get('role') not in ('system_admin', 'server_admin'):
+        raise HTTPException(status_code=403, detail='Admin access required')
+
+    territory = await db.territories.find_one({'territory_id': territory_id})
+    if not territory:
+        raise HTTPException(status_code=404, detail='Territory not found')
+
+    updates: dict = {'updated_at': datetime.now(timezone.utc).isoformat()}
+    if data.name is not None:
+        n = data.name.strip()
+        if not n or len(n) > 80:
+            raise HTTPException(status_code=400, detail='Invalid name')
+        updates['name'] = n
+    if data.territory_type is not None:
+        if data.territory_type not in TERRITORY_TYPES:
+            raise HTTPException(status_code=400, detail='Invalid territory_type')
+        updates['territory_type'] = data.territory_type
+    if data.location_name is not None:
+        updates['location_name'] = data.location_name.strip()[:100]
+    if data.grid_x is not None:
+        updates['grid_x'] = data.grid_x
+    if data.grid_y is not None:
+        updates['grid_y'] = data.grid_y
+    if data.description is not None:
+        updates['description'] = data.description.strip()[:500]
+    if data.bonuses is not None:
+        updates['bonuses'] = [(b.strip()[:120]) for b in data.bonuses[:10] if b.strip()]
+    if data.status is not None:
+        if data.status not in TERRITORY_STATUSES:
+            raise HTTPException(status_code=400, detail='Invalid status')
+        updates['status'] = data.status
+    if data.notes is not None:
+        updates['notes'] = data.notes.strip()[:500]
+    if data.controlled_by is not None:
+        if data.controlled_by == '':
+            # Unclaim
+            updates.update({'controlled_by': None, 'controlled_by_name': None,
+                            'controlled_by_tag': None, 'status': 'unclaimed'})
+        else:
+            faction = await db.factions.find_one({'faction_id': data.controlled_by, 'status': 'active'})
+            if not faction:
+                raise HTTPException(status_code=404, detail='Faction not found')
+            updates.update({
+                'controlled_by': data.controlled_by,
+                'controlled_by_name': faction['name'],
+                'controlled_by_tag': faction['tag'],
+                'status': 'controlled',
+                'contested_by': None,
+                'contested_by_name': None,
+            })
+            # Update faction territory count
+            old_controller = territory.get('controlled_by')
+            if old_controller and old_controller != data.controlled_by:
+                await db.factions.update_one({'faction_id': old_controller}, {'$inc': {'territory_count': -1}})
+            if old_controller != data.controlled_by:
+                await db.factions.update_one({'faction_id': data.controlled_by}, {'$inc': {'territory_count': 1}})
+
+    await db.territories.update_one({'territory_id': territory_id}, {'$set': updates})
+    return {'message': 'Territory updated'}
+
+
+@router.post('/territories/{territory_id}/claim')
+async def claim_territory(territory_id: str, request: Request):
+    """Faction leader/officer claims an unclaimed territory."""
+    user = await get_current_user(request)
+    uid = user['_id']
+
+    territory = await db.territories.find_one({'territory_id': territory_id}, {'_id': 0})
+    if not territory:
+        raise HTTPException(status_code=404, detail='Territory not found')
+    if territory['status'] not in ('unclaimed', 'contested'):
+        raise HTTPException(status_code=400, detail='Territory is already controlled')
+
+    membership = await db.faction_members.find_one(
+        {'user_id': uid, 'status': 'active', 'role': {'$in': ['leader', 'officer']}}, {'_id': 0}
+    )
+    if not membership:
+        raise HTTPException(status_code=403, detail='Only faction leaders/officers can claim territory')
+
+    faction = await db.factions.find_one({'faction_id': membership['faction_id'], 'status': 'active'})
+    if not faction:
+        raise HTTPException(status_code=404, detail='Faction not found')
+
+    now = datetime.now(timezone.utc).isoformat()
+    old_controller = territory.get('controlled_by')
+
+    await db.territories.update_one(
+        {'territory_id': territory_id},
+        {'$set': {
+            'controlled_by': faction['faction_id'],
+            'controlled_by_name': faction['name'],
+            'controlled_by_tag': faction['tag'],
+            'contested_by': None,
+            'contested_by_name': None,
+            'status': 'controlled',
+            'updated_at': now,
+        }}
+    )
+    # Update territory counts
+    if old_controller and old_controller != faction['faction_id']:
+        await db.factions.update_one({'faction_id': old_controller}, {'$inc': {'territory_count': -1}})
+    if old_controller != faction['faction_id']:
+        await db.factions.update_one({'faction_id': faction['faction_id']}, {'$inc': {'territory_count': 1}})
+
+    return {'message': f'[{faction["tag"]}] {faction["name"]} now controls {territory["name"]}'}
+
+
+@router.post('/territories/{territory_id}/contest')
+async def contest_territory(territory_id: str, request: Request):
+    """Faction leader/officer contests a territory controlled by another faction."""
+    user = await get_current_user(request)
+    uid = user['_id']
+
+    territory = await db.territories.find_one({'territory_id': territory_id}, {'_id': 0})
+    if not territory:
+        raise HTTPException(status_code=404, detail='Territory not found')
+    if territory['status'] != 'controlled':
+        raise HTTPException(status_code=400, detail='Can only contest controlled territory')
+
+    membership = await db.faction_members.find_one(
+        {'user_id': uid, 'status': 'active', 'role': {'$in': ['leader', 'officer']}}, {'_id': 0}
+    )
+    if not membership:
+        raise HTTPException(status_code=403, detail='Only faction leaders/officers can contest territory')
+
+    if membership['faction_id'] == territory.get('controlled_by'):
+        raise HTTPException(status_code=400, detail='You already control this territory')
+
+    faction = await db.factions.find_one({'faction_id': membership['faction_id'], 'status': 'active'})
+    if not faction:
+        raise HTTPException(status_code=404, detail='Faction not found')
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.territories.update_one(
+        {'territory_id': territory_id},
+        {'$set': {
+            'contested_by': faction['faction_id'],
+            'contested_by_name': faction['name'],
+            'status': 'contested',
+            'updated_at': now,
+        }}
+    )
+    return {'message': f'{territory["name"]} is now contested by [{faction["tag"]}] {faction["name"]}'}
+
+
+@router.delete('/territories/{territory_id}')
+async def delete_territory(territory_id: str, request: Request):
+    """GM only: remove a territory."""
+    user = await get_current_user(request)
+    if user.get('role') not in ('system_admin', 'server_admin'):
+        raise HTTPException(status_code=403, detail='Admin access required')
+    territory = await db.territories.find_one({'territory_id': territory_id}, {'_id': 0, 'controlled_by': 1})
+    if not territory:
+        raise HTTPException(status_code=404, detail='Territory not found')
+    if territory.get('controlled_by'):
+        await db.factions.update_one({'faction_id': territory['controlled_by']}, {'$inc': {'territory_count': -1}})
+    await db.territories.delete_one({'territory_id': territory_id})
+    return {'message': 'Territory deleted'}
+
+
 def init_faction_routes(database, auth_func):
     global db, get_current_user
     db = database

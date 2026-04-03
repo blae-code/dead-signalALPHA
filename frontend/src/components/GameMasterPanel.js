@@ -5,7 +5,10 @@ import {
   Zap, Clock, MessageSquare, Shield, Users, Terminal, AlertTriangle,
   Play, Pause, Trash2, RefreshCw, Plus, Send, Eye, X, ChevronRight,
   Radio, FileText, Ban, UserCheck, Settings, RotateCcw, HardDrive, Volume2,
+  User, Target,
 } from 'lucide-react';
+import NPCPanel from '@/components/NPCPanel';
+import MissionPanel from '@/components/MissionPanel';
 
 const ACTION_ICONS = {
   restart: <RotateCcw className="w-3 h-3" />,
@@ -35,13 +38,15 @@ export default function GameMasterPanel() {
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
   const tabs = [
-    { id: 'overview', label: 'GM Overview', icon: <Settings className="w-3 h-3" /> },
-    { id: 'scheduler', label: 'Scheduler', icon: <Clock className="w-3 h-3" /> },
-    { id: 'broadcast', label: 'Broadcasts', icon: <MessageSquare className="w-3 h-3" /> },
-    { id: 'players', label: 'Player Admin', icon: <Users className="w-3 h-3" /> },
-    { id: 'triggers', label: 'Triggers', icon: <Zap className="w-3 h-3" /> },
-    { id: 'commands', label: 'Quick Cmds', icon: <Terminal className="w-3 h-3" /> },
-    { id: 'log', label: 'Action Log', icon: <FileText className="w-3 h-3" /> },
+    { id: 'overview',  label: 'GM Overview',  icon: <Settings className="w-3 h-3" /> },
+    { id: 'npcs',      label: 'NPCs',          icon: <User className="w-3 h-3" /> },
+    { id: 'missions',  label: 'Missions',      icon: <Target className="w-3 h-3" /> },
+    { id: 'scheduler', label: 'Scheduler',     icon: <Clock className="w-3 h-3" /> },
+    { id: 'broadcast', label: 'Broadcasts',    icon: <MessageSquare className="w-3 h-3" /> },
+    { id: 'players',   label: 'Player Admin',  icon: <Users className="w-3 h-3" /> },
+    { id: 'triggers',  label: 'Triggers',      icon: <Zap className="w-3 h-3" /> },
+    { id: 'commands',  label: 'Quick Cmds',    icon: <Terminal className="w-3 h-3" /> },
+    { id: 'log',       label: 'Action Log',    icon: <FileText className="w-3 h-3" /> },
   ];
 
   return (
@@ -64,13 +69,15 @@ export default function GameMasterPanel() {
         ))}
       </div>
 
-      {tab === 'overview' && <GMOverview stats={stats} onRefresh={fetchStats} />}
+      {tab === 'overview'  && <GMOverview stats={stats} onRefresh={fetchStats} />}
+      {tab === 'npcs'      && <NPCPanel />}
+      {tab === 'missions'  && <MissionPanel />}
       {tab === 'scheduler' && <SchedulerPanel />}
       {tab === 'broadcast' && <BroadcastPanel />}
-      {tab === 'players' && <PlayerAdminPanel />}
-      {tab === 'triggers' && <TriggersPanel />}
-      {tab === 'commands' && <QuickCommandsPanel />}
-      {tab === 'log' && <ActionLogPanel />}
+      {tab === 'players'   && <PlayerAdminPanel />}
+      {tab === 'triggers'  && <TriggersPanel />}
+      {tab === 'commands'  && <QuickCommandsPanel />}
+      {tab === 'log'       && <ActionLogPanel />}
     </div>
   );
 }
@@ -723,22 +730,88 @@ function CreateTriggerForm({ onDone }) {
   const [action, setAction] = useState('broadcast');
   const [message, setMessage] = useState('');
   const [command, setCommand] = useState('');
+  const [intelTitle, setIntelTitle] = useState('');
+  const [intelBody, setIntelBody] = useState('');
+  const [intelPriority, setIntelPriority] = useState('priority');
+  const [intelCategory, setIntelCategory] = useState('operations');
+  const [missionId, setMissionId] = useState('');
+  const [missionBroadcast, setMissionBroadcast] = useState('');
+  const [npcId, setNpcId] = useState('');
+  const [npcLocation, setNpcLocation] = useState('');
+  const [supplyItem, setSupplyItem] = useState('');
+  const [supplyQty, setSupplyQty] = useState(1);
+  const [supplyPriority, setSupplyPriority] = useState('urgent');
+  const [supplyNotes, setSupplyNotes] = useState('');
+  const [missions, setMissions] = useState([]);
+  const [npcs, setNpcs] = useState([]);
+  const [resources, setResources] = useState([]);
   const [cooldown, setCooldown] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      api.get('/missions'),
+      api.get('/npcs'),
+      api.get('/economy/resources'),
+    ]).then(([missionsRes, npcsRes, resourcesRes]) => {
+      if (!active) return;
+      setMissions(missionsRes.data || []);
+      setNpcs(npcsRes.data || []);
+      setResources(resourcesRes.data || []);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const presets = [
     { name: 'Welcome Message', event: 'player_connect', action: 'broadcast', params: { message: 'Welcome {player} to Lonely Island!' }, cooldown: 5 },
     { name: 'Goodbye Message', event: 'player_disconnect', action: 'broadcast', params: { message: '{player} has gone dark. Signal lost.' }, cooldown: 5 },
     { name: 'Horde Alert', event: 'horde_event', action: 'broadcast', params: { message: 'HORDE INCOMING! All survivors take defensive positions!' }, cooldown: 60 },
     { name: 'Death Report', event: 'player_death', action: 'broadcast', params: { message: 'Another soul lost in the wasteland. {player} has fallen.' }, cooldown: 10 },
+    {
+      name: 'Airdrop Intel',
+      event: 'airdrop',
+      action: 'create_intel',
+      params: {
+        title: 'Supply Window Open',
+        body: '{event_summary} Move a scavenging team before the island closes in.',
+        priority: 'priority',
+        category: 'survival',
+      },
+      cooldown: 120,
+    },
+    {
+      name: 'Storm Request',
+      event: 'weather_change',
+      action: 'create_supply_request',
+      params: {
+        item: 'Water Bottle',
+        qty: 6,
+        priority: 'urgent',
+        notes: 'Weather shift detected. Forward shelters need fresh water and medical stock.',
+      },
+      cooldown: 900,
+    },
   ];
 
   const applyPreset = (p) => {
     setName(p.name);
     setEvent(p.event);
     setAction(p.action);
-    if (p.params.message) setMessage(p.params.message);
-    if (p.params.command) setCommand(p.params.command);
+    setMessage(p.params.message || '');
+    setCommand(p.params.command || '');
+    setIntelTitle(p.params.title || '');
+    setIntelBody(p.params.body || '');
+    setIntelPriority(p.params.priority || 'priority');
+    setIntelCategory(p.params.category || 'operations');
+    setMissionId(p.params.mission_id || '');
+    setMissionBroadcast(p.params.broadcast_message || '');
+    setNpcId(p.params.npc_id || '');
+    setNpcLocation(p.params.location_name || '');
+    setSupplyItem(p.params.item || '');
+    setSupplyQty(p.params.qty || 1);
+    setSupplyPriority(p.params.priority || 'urgent');
+    setSupplyNotes(p.params.notes || '');
     setCooldown(p.cooldown || 0);
   };
 
@@ -747,6 +820,26 @@ function CreateTriggerForm({ onDone }) {
     const params = {};
     if (action === 'broadcast') params.message = message;
     if (action === 'command') params.command = command;
+    if (action === 'create_intel') {
+      params.title = intelTitle;
+      params.body = intelBody;
+      params.priority = intelPriority;
+      params.category = intelCategory;
+    }
+    if (action === 'activate_mission') {
+      params.mission_id = missionId;
+      if (missionBroadcast.trim()) params.broadcast_message = missionBroadcast.trim();
+    }
+    if (action === 'spawn_npc') {
+      params.npc_id = npcId;
+      if (npcLocation.trim()) params.location_name = npcLocation.trim();
+    }
+    if (action === 'create_supply_request') {
+      params.item = supplyItem;
+      params.qty = supplyQty;
+      params.priority = supplyPriority;
+      if (supplyNotes.trim()) params.notes = supplyNotes.trim();
+    }
     try {
       await api.post('/gm/triggers', { name, trigger_event: event, action, params, cooldown_seconds: cooldown });
       onDone();
@@ -779,6 +872,11 @@ function CreateTriggerForm({ onDone }) {
             <option value="horde_event">Horde Event</option>
             <option value="airdrop">Airdrop</option>
             <option value="season_change">Season Change</option>
+            <option value="weather_change">Weather Change</option>
+            <option value="time_change">Time Change</option>
+            <option value="environment">Environment Shift</option>
+            <option value="chat">Chat Event</option>
+            <option value="server">Server Event</option>
           </select>
         </div>
       </div>
@@ -788,6 +886,10 @@ function CreateTriggerForm({ onDone }) {
           <select value={action} onChange={(e) => setAction(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none">
             <option value="broadcast">Broadcast</option>
             <option value="command">Command</option>
+            <option value="create_intel">Create Intel</option>
+            <option value="activate_mission">Activate Mission</option>
+            <option value="spawn_npc">Spawn NPC</option>
+            <option value="create_supply_request">Create Supply Request</option>
           </select>
         </div>
         <div>
@@ -795,6 +897,9 @@ function CreateTriggerForm({ onDone }) {
           <input type="number" value={cooldown} onChange={(e) => setCooldown(Number(e.target.value))} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none" />
         </div>
       </div>
+      <p className="text-[10px] font-mono text-[#88837a]">
+        Tokens available in text fields: {'{player}'}, {'{event_summary}'}, {'{weather}'}, {'{season}'}, {'{time_of_day}'}
+      </p>
       {action === 'broadcast' && (
         <div>
           <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Message (use {'{player}'} for name)</label>
@@ -806,6 +911,111 @@ function CreateTriggerForm({ onDone }) {
           <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Command</label>
           <input value={command} onChange={(e) => setCommand(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none" />
         </div>
+      )}
+      {action === 'create_intel' && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Intel Title</label>
+              <input value={intelTitle} onChange={(e) => setIntelTitle(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Priority</label>
+                <select value={intelPriority} onChange={(e) => setIntelPriority(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none">
+                  <option value="routine">Routine</option>
+                  <option value="priority">Priority</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Category</label>
+                <select value={intelCategory} onChange={(e) => setIntelCategory(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none">
+                  <option value="operations">Operations</option>
+                  <option value="combat">Combat</option>
+                  <option value="survival">Survival</option>
+                  <option value="environment">Environment</option>
+                  <option value="social">Social</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Brief Body</label>
+            <textarea value={intelBody} onChange={(e) => setIntelBody(e.target.value)} rows={4} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none resize-none" />
+          </div>
+        </>
+      )}
+      {action === 'activate_mission' && (
+        <>
+          <div>
+            <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Mission</label>
+            <select value={missionId} onChange={(e) => setMissionId(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none">
+              <option value="">Select mission</option>
+              {missions.map((mission) => (
+                <option key={mission.mission_id} value={mission.mission_id}>
+                  {mission.title} ({mission.status})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Broadcast Message (optional)</label>
+            <input value={missionBroadcast} onChange={(e) => setMissionBroadcast(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none" />
+          </div>
+        </>
+      )}
+      {action === 'spawn_npc' && (
+        <>
+          <div>
+            <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">NPC</label>
+            <select value={npcId} onChange={(e) => setNpcId(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none">
+              <option value="">Select NPC</option>
+              {npcs.map((npc) => (
+                <option key={npc.npc_id} value={npc.npc_id}>
+                  {npc.name} ({npc.role})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Spawn Location Override</label>
+            <input value={npcLocation} onChange={(e) => setNpcLocation(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none" placeholder="Leave blank to use the NPC record location" />
+          </div>
+        </>
+      )}
+      {action === 'create_supply_request' && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-2">
+              <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Resource</label>
+              <select value={supplyItem} onChange={(e) => setSupplyItem(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none">
+                <option value="">Select resource</option>
+                {resources.map((resource) => (
+                  <option key={resource.name} value={resource.name}>{resource.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Qty</label>
+              <input type="number" min="1" value={supplyQty} onChange={(e) => setSupplyQty(Number(e.target.value))} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Priority</label>
+              <select value={supplyPriority} onChange={(e) => setSupplyPriority(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none">
+                <option value="low">Low</option>
+                <option value="normal">Normal</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Notes</label>
+              <input value={supplyNotes} onChange={(e) => setSupplyNotes(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none" />
+            </div>
+          </div>
+        </>
       )}
       <button onClick={handleSubmit} disabled={submitting || !name.trim()} className="w-full border border-[#c4841d] text-[#c4841d] font-heading text-xs uppercase tracking-widest py-2 hover:bg-[#c4841d] hover:text-[#111111] transition-all disabled:opacity-30">
         {submitting ? 'Creating...' : 'Create Trigger'}

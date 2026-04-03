@@ -24,6 +24,15 @@ Rules:
 - Reference frequencies, static, signal strength
 - No emojis, no markdown"""
 
+INTEL_SYSTEM = """You are the intelligence officer for "Dead Signal". Turn live game telemetry into concise, grounded player-facing intel.
+
+Rules:
+- Keep it to 2-4 sentences
+- Stay in-world and thematic, but prioritize clarity over poetry
+- Reference the current world pressure when relevant
+- Focus on actionable implications, not just description
+- No markdown, no emojis"""
+
 
 class AINarrator:
     def __init__(self):
@@ -35,19 +44,24 @@ class AINarrator:
 
     async def narrate_event(self, event: dict) -> str:
         if not self.configured:
-            return f"[SIGNAL LOST] {event.get('raw', 'Unknown event')}"
+            return f"[SIGNAL LOST] {event.get('summary') or event.get('raw', 'Unknown event')}"
         try:
             chat = LlmChat(
                 api_key=self.api_key,
-                session_id=f"narrator-{event.get('timestamp', 'x')}",
+                session_id=f"narrator-{event.get('event_id', event.get('timestamp', 'x'))}",
                 system_message=NARRATOR_SYSTEM,
             ).with_model("gemini", "gemini-2.5-flash")
 
             prompt = (
-                f"Narrate this survival server event in 1-2 dramatic sentences:\n"
+                "Narrate this survival server event in 1-2 dramatic sentences:\n"
                 f"Event type: {event.get('type', 'unknown')}\n"
+                f"Category: {event.get('category', 'operations')}\n"
                 f"Severity: {event.get('severity', 'low')}\n"
-                f"Players: {', '.join(event.get('players', []))}\n"
+                f"Director priority: {event.get('director_priority', 'routine')}\n"
+                f"Players: {', '.join(event.get('players', [])) or 'none'}\n"
+                f"Summary: {event.get('summary', '')}\n"
+                f"Tags: {', '.join(event.get('tags', []))}\n"
+                f"World snapshot: {event.get('world', {})}\n"
                 f"Raw: {event.get('raw', '')}\n"
                 f"Details: {event.get('details', {})}"
             )
@@ -55,7 +69,7 @@ class AINarrator:
             return response
         except Exception as e:
             logger.error(f'Narration error: {e}')
-            return f"[SIGNAL DEGRADED] {event.get('raw', 'Unknown event')}"
+            return f"[SIGNAL DEGRADED] {event.get('summary') or event.get('raw', 'Unknown event')}"
 
     async def radio_report(self, events: list) -> str:
         if not self.configured:
@@ -70,13 +84,13 @@ class AINarrator:
             ).with_model("gemini", "gemini-2.5-flash")
 
             summary = "\n".join(
-                f"- [{e.get('type', '?').upper()}] {e.get('raw', '')}"
+                f"- [{e.get('type', '?').upper()}] {e.get('summary') or e.get('raw', '')}"
                 for e in events[-20:]
             )
             prompt = (
-                f"Generate a radio intelligence report based on these recent server events:\n"
+                "Generate a radio intelligence report based on these recent server events:\n"
                 f"{summary}\n\n"
-                f"Write a 3-5 sentence atmospheric radio broadcast summarizing the current situation."
+                "Write a 3-5 sentence atmospheric radio broadcast summarizing the current situation."
             )
             response = await chat.send_message(UserMessage(text=prompt))
             return response
@@ -104,3 +118,30 @@ class AINarrator:
         except Exception as e:
             logger.error(f'Ambient dispatch error: {e}')
             return f"[{time_of_day.upper()}] The signal persists. Stay alive."
+
+    async def intel_brief(self, event: dict, world_context: dict) -> str:
+        world_state = world_context.get('world_state', {}) if isinstance(world_context, dict) else {}
+        if not self.configured:
+            return (
+                f"{event.get('summary') or event.get('raw', 'Signal traffic detected.')} "
+                f"Current pressure: {world_state.get('weather', 'clear')} weather, "
+                f"{world_state.get('time_of_day', 'unknown')} conditions, danger {world_state.get('danger_level', '?')}/10."
+            ).strip()
+        try:
+            chat = LlmChat(
+                api_key=self.api_key,
+                session_id=f"intel-{event.get('event_id', event.get('timestamp', 'x'))}",
+                system_message=INTEL_SYSTEM,
+            ).with_model("gemini", "gemini-2.5-flash")
+
+            prompt = (
+                "Create an in-world intel brief from this event and state snapshot.\n"
+                f"Event: {event}\n"
+                f"World context: {world_context}\n"
+                "Write a concise 2-4 sentence brief that explains what happened and why it matters right now."
+            )
+            response = await chat.send_message(UserMessage(text=prompt))
+            return response
+        except Exception as e:
+            logger.error(f'Intel brief error: {e}')
+            return event.get('summary') or event.get('raw', 'Signal traffic detected.')

@@ -22,7 +22,14 @@ ALLOWED_TRIGGER_EVENTS = {
     'horde_event', 'airdrop', 'season_change', 'weather_change',
     'time_change', 'environment', 'chat', 'server',
 }
-ALLOWED_TRIGGER_ACTIONS = {'broadcast', 'command'}
+ALLOWED_TRIGGER_ACTIONS = {
+    'broadcast',
+    'command',
+    'create_intel',
+    'spawn_npc',
+    'activate_mission',
+    'create_supply_request',
+}
 
 
 # ==================== MODELS ====================

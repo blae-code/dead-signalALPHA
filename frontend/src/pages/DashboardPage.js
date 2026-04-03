@@ -6,6 +6,7 @@ import ServerStatus from '@/components/ServerStatus';
 import WorldConditions from '@/components/WorldConditions';
 import EventFeed from '@/components/EventFeed';
 import NarrativePanel from '@/components/NarrativePanel';
+import IntelBoard from '@/components/IntelBoard';
 import RconConsole from '@/components/RconConsole';
 import GridMap from '@/components/GridMap';
 import PlayerRoster from '@/components/PlayerRoster';
@@ -23,7 +24,17 @@ import {
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
-  const { liveStats, serverState, liveEvents, liveNarrations, consoleLogs, worldState, scarcityData, connected } = useServerWebSocket();
+  const {
+    liveStats,
+    serverState,
+    liveEvents,
+    liveIntel,
+    liveNarrations,
+    consoleLogs,
+    worldState,
+    scarcityData,
+    connected,
+  } = useServerWebSocket();
   const [serverData, setServerData] = useState(null);
   const [events, setEvents] = useState([]);
   const [backups, setBackups] = useState([]);
@@ -180,6 +191,13 @@ export default function DashboardPage() {
               <Activity className="w-3 h-3 mr-2" /> Overview
             </TabsTrigger>
             <TabsTrigger
+              data-testid="tab-intel"
+              value="intel"
+              className="rounded-none font-heading uppercase tracking-widest text-xs data-[state=active]:bg-[#c4841d]/10 data-[state=active]:text-[#c4841d] data-[state=active]:border-b-2 data-[state=active]:border-[#c4841d] text-[#88837a] hover:text-[#d4cfc4] px-4 py-2"
+            >
+              <Radio className="w-3 h-3 mr-2" /> Intel
+            </TabsTrigger>
+            <TabsTrigger
               data-testid="tab-console"
               value="console"
               className="rounded-none font-heading uppercase tracking-widest text-xs data-[state=active]:bg-[#c4841d]/10 data-[state=active]:text-[#c4841d] data-[state=active]:border-b-2 data-[state=active]:border-[#c4841d] text-[#88837a] hover:text-[#d4cfc4] px-4 py-2"
@@ -246,6 +264,10 @@ export default function DashboardPage() {
                 <NarrativePanel events={allEvents} liveNarrations={liveNarrations} isAdmin={isAdmin} />
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="intel" className="mt-0">
+            <IntelBoard liveIntel={liveIntel} liveWorldState={worldState} liveScarcity={scarcityData} />
           </TabsContent>
 
           {/* Console Tab */}

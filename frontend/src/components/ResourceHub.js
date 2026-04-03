@@ -3,8 +3,9 @@ import api from '@/lib/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Package, ArrowRightLeft, Hammer, AlertCircle, Check, X, Plus,
-  RefreshCw, ChevronDown, ChevronRight, Search, Send, Clock,
+  RefreshCw, ChevronDown, ChevronRight, Search, Send, Clock, Boxes,
 } from 'lucide-react';
+import InventoryPanel from '@/components/InventoryPanel';
 
 const RARITY_COLORS = {
   common: 'text-[#88837a] border-[#88837a]',
@@ -50,10 +51,11 @@ export default function ResourceHub({ user, liveScarcity, liveWorldState }) {
   const [tab, setTab] = useState('trade');
 
   const tabs = [
-    { id: 'trade', label: 'Trade Board', icon: <ArrowRightLeft className="w-3 h-3" /> },
-    { id: 'supply', label: 'Supply Requests', icon: <Send className="w-3 h-3" /> },
-    { id: 'crafting', label: 'Crafting Planner', icon: <Hammer className="w-3 h-3" /> },
-    { id: 'resources', label: 'Scarcity Index', icon: <Package className="w-3 h-3" /> },
+    { id: 'trade',     label: 'Trade Board',     icon: <ArrowRightLeft className="w-3 h-3" /> },
+    { id: 'supply',    label: 'Supply Requests', icon: <Send className="w-3 h-3" /> },
+    { id: 'logistics', label: 'Logistics',       icon: <Boxes className="w-3 h-3" /> },
+    { id: 'crafting',  label: 'Crafting Planner',icon: <Hammer className="w-3 h-3" /> },
+    { id: 'resources', label: 'Scarcity Index',  icon: <Package className="w-3 h-3" /> },
   ];
 
   return (
@@ -74,9 +76,10 @@ export default function ResourceHub({ user, liveScarcity, liveWorldState }) {
           </button>
         ))}
       </div>
-      {tab === 'trade' && <TradeBoard user={user} />}
-      {tab === 'supply' && <SupplyBoard user={user} />}
-      {tab === 'crafting' && <CraftingPlanner />}
+      {tab === 'trade'     && <TradeBoard user={user} />}
+      {tab === 'supply'    && <SupplyBoard user={user} />}
+      {tab === 'logistics' && <InventoryPanel />}
+      {tab === 'crafting'  && <CraftingPlanner />}
       {tab === 'resources' && <ScarcityIndex liveScarcity={liveScarcity} liveWorldState={liveWorldState} />}
     </div>
   );

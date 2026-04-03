@@ -4,6 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Swords, Shield, Users, Crown, UserPlus, ChevronRight, X, Check,
   Handshake, AlertTriangle, ArrowRightLeft, Flag, RefreshCw,
+  MapPin, TrendingUp, TrendingDown, Minus, Home,
 } from 'lucide-react';
 
 const FACTION_COLORS = [
@@ -346,6 +347,16 @@ function FactionDetail({ data, user, myMembership, onBack, onRefresh }) {
   const [inviting, setInviting] = useState(false);
   const [showDiplomacy, setShowDiplomacy] = useState(false);
   const [error, setError] = useState('');
+  const [reputation, setReputation] = useState([]);
+  const [territories, setTerritories] = useState([]);
+
+  useEffect(() => {
+    if (!faction?.faction_id) return;
+    api.get(`/factions/${faction.faction_id}/reputation`).then(({ data: d }) => setReputation(d || [])).catch(() => {});
+    api.get('/factions/territories').then(({ data: d }) => {
+      setTerritories((d || []).filter(t => t.controlled_by === faction.faction_id || t.contested_by === faction.faction_id));
+    }).catch(() => {});
+  }, [faction?.faction_id]);
 
   if (!faction) return null;
 
@@ -544,6 +555,94 @@ function FactionDetail({ data, user, myMembership, onBack, onRefresh }) {
           </ScrollArea>
         </div>
       </div>
+
+      {/* Reputation */}
+      {reputation.length > 0 && (
+        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
+          <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-[#c4841d]" />
+              <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Reputation</h3>
+            </div>
+          </div>
+          <div className="p-3 space-y-2">
+            {reputation.map((r, i) => {
+              const score = r.score;
+              const color = score > 40 ? '#6b7a3d' : score > 0 ? '#c4841d' : score > -40 ? '#c4841d' : '#8b3a3a';
+              const Icon = score > 10 ? TrendingUp : score < -10 ? TrendingDown : Minus;
+              const pct = Math.abs(score);
+              const label = score >= 60 ? 'Allied' : score >= 20 ? 'Friendly' : score >= -20 ? 'Neutral' : score >= -60 ? 'Hostile' : 'Enemy';
+              return (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: r.other_faction_color }} />
+                  <span className="text-[11px] font-mono text-[#d4cfc4] w-28 flex-shrink-0">
+                    [{r.other_faction_tag}] {r.other_faction_name}
+                  </span>
+                  <div className="flex-1 h-1.5 bg-[#2a2520] relative">
+                    <div className="absolute inset-y-0 left-1/2 w-px bg-[#3a3530]" />
+                    <div
+                      className="absolute top-0 h-1.5 transition-all"
+                      style={{
+                        backgroundColor: color,
+                        left: score >= 0 ? '50%' : `${50 - pct / 2}%`,
+                        width: `${pct / 2}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0 w-24 justify-end">
+                    <Icon className="w-3 h-3" style={{ color }} />
+                    <span className="text-[10px] font-mono" style={{ color }}>{score > 0 ? '+' : ''}{score}</span>
+                    <span className="text-[9px] font-mono text-[#88837a]">{label}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Territory */}
+      {territories.length > 0 && (
+        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
+          <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-[#c4841d]" />
+              <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">
+                Territory ({faction.territory_count || territories.length})
+              </h3>
+            </div>
+          </div>
+          <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+            {territories.map((t, i) => {
+              const contested = t.contested_by === faction.faction_id;
+              const controlled = t.controlled_by === faction.faction_id;
+              return (
+                <div key={i} className={`border p-2 ${controlled ? 'border-[#6b7a3d]/60' : 'border-[#c4841d]/60'}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-heading uppercase tracking-widest text-[#d4cfc4]">{t.name}</span>
+                    <span className={`text-[9px] font-mono uppercase px-1 py-0.5 border ${
+                      contested ? 'border-[#c4841d] text-[#c4841d]' : 'border-[#6b7a3d] text-[#6b7a3d]'
+                    }`}>
+                      {contested ? 'contesting' : 'controlled'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] font-mono text-[#88837a]">
+                    <span className="text-[#c4841d]">{t.territory_type?.replace('_', ' ')}</span>
+                    {t.location_name && <><MapPin className="w-2.5 h-2.5" /><span>{t.location_name}</span></>}
+                  </div>
+                  {t.bonuses?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {t.bonuses.map((b, bi) => (
+                        <span key={bi} className="text-[9px] font-mono border border-[#3a6b8b]/50 text-[#3a6b8b] px-1">{b}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Actions */}
       {isMyFaction && (
