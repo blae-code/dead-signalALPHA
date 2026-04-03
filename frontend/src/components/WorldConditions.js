@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '@/lib/api';
 import {
   Sun, Moon, Cloud, CloudRain, CloudLightning, CloudSnow, CloudFog,
   Thermometer, AlertTriangle, Clock, Leaf, Snowflake, Flower2, TreeDeciduous,
-  ShieldAlert, Eye,
+  ShieldAlert, Eye, Radio,
 } from 'lucide-react';
 
 const WEATHER_ICONS = {
@@ -58,21 +58,47 @@ function Tooltip({ children, text }) {
   );
 }
 
-export default function WorldConditions() {
-  const [world, setWorld] = useState(null);
+export default function WorldConditions({ liveWorldState }) {
+  const [apiWorld, setApiWorld] = useState(null);
+  const [transition, setTransition] = useState('');
+  const prevWeatherRef = useRef(null);
+  const prevTimeRef = useRef(null);
 
+  // API fallback — only used if WS hasn't delivered data yet
   const fetchWorld = useCallback(async () => {
     try {
       const { data } = await api.get('/world/state');
-      setWorld(data);
+      setApiWorld(data);
     } catch { /* graceful */ }
   }, []);
 
   useEffect(() => {
-    fetchWorld();
-    const i = setInterval(fetchWorld, 30000);
-    return () => clearInterval(i);
-  }, [fetchWorld]);
+    if (!liveWorldState) {
+      fetchWorld();
+      const i = setInterval(fetchWorld, 30000);
+      return () => clearInterval(i);
+    }
+  }, [fetchWorld, liveWorldState]);
+
+  // Use live WS data as primary, API as fallback
+  const world = liveWorldState || apiWorld;
+
+  // Detect condition transitions for animation
+  useEffect(() => {
+    if (!world) return;
+    if (prevWeatherRef.current && prevWeatherRef.current !== world.weather) {
+      setTransition('weather');
+      const t = setTimeout(() => setTransition(''), 2000);
+      return () => clearTimeout(t);
+    }
+    if (prevTimeRef.current && prevTimeRef.current !== world.time_of_day) {
+      setTransition('time');
+      const t = setTimeout(() => setTransition(''), 2000);
+      return () => clearTimeout(t);
+    }
+    prevWeatherRef.current = world.weather;
+    prevTimeRef.current = world.time_of_day;
+  }, [world?.weather, world?.time_of_day]);
 
   if (!world) {
     return (
@@ -88,6 +114,7 @@ export default function WorldConditions() {
   const dangerColor = DANGER_COLORS[world.danger_level] || DANGER_COLORS[0];
   const dangerLabel = DANGER_LABELS[world.danger_level] || 'UNKNOWN';
   const weatherColor = WEATHER_COLORS[world.weather] || '#88837a';
+  const isLive = !!liveWorldState;
 
   // Day progress bar (24h)
   const dayProgress = (world.hour / 24) * 100;
@@ -101,6 +128,12 @@ export default function WorldConditions() {
         <div className="flex items-center gap-2">
           <Leaf className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">World Conditions</h3>
+          {isLive && (
+            <span className="flex items-center gap-1 text-[10px] font-mono text-[#6b7a3d]" data-testid="world-live-indicator">
+              <Radio className="w-3 h-3 animate-pulse" />
+              LIVE
+            </span>
+          )}
         </div>
         <Tooltip text={`Threat Level: ${dangerLabel}. Combined assessment of time, weather, and season hazards.`}>
           <div className="flex items-center gap-1.5 cursor-help" data-testid="danger-level">
@@ -112,11 +145,12 @@ export default function WorldConditions() {
               {Array.from({ length: 5 }).map((_, i) => (
                 <div
                   key={i}
-                  className="w-1.5 h-3 transition-all"
+                  className="w-1.5 h-3"
                   style={{
                     backgroundColor: i < Math.ceil(world.danger_level / 2)
                       ? dangerColor
                       : '#2a2520',
+                    transition: 'background-color 1s ease',
                   }}
                 />
               ))}
@@ -138,27 +172,35 @@ export default function WorldConditions() {
         <div className="grid grid-cols-2 gap-3 mb-3">
           {/* Time of Day */}
           <Tooltip text={world.time_tooltip}>
-            <div className="border border-[#2a2520] bg-[#111111] p-3 cursor-help hover:border-[#c4841d]/30 transition-colors" data-testid="world-time">
+            <div
+              className={`border border-[#2a2520] bg-[#111111] p-3 cursor-help hover:border-[#c4841d]/30 ${transition === 'time' ? 'ring-1 ring-[#c4841d]/50' : ''}`}
+              style={{ transition: 'all 0.8s ease' }}
+              data-testid="world-time"
+            >
               <div className="flex items-center gap-2 mb-1">
                 {TIME_ICONS[world.time_of_day]}
                 <span className="text-[10px] font-mono uppercase tracking-widest text-[#88837a]">Time</span>
               </div>
-              <p className="font-heading text-xl uppercase tracking-wider text-[#d4cfc4]">{world.hour_display}</p>
-              <p className="text-[10px] font-mono uppercase text-[#c4841d] mt-0.5">{world.time_of_day}</p>
+              <p className="font-heading text-xl uppercase tracking-wider text-[#d4cfc4]" style={{ transition: 'color 0.5s ease' }}>{world.hour_display}</p>
+              <p className="text-[10px] font-mono uppercase text-[#c4841d] mt-0.5" style={{ transition: 'color 0.5s ease' }}>{world.time_of_day}</p>
             </div>
           </Tooltip>
 
           {/* Weather */}
           <Tooltip text={world.weather_tooltip}>
-            <div className="border border-[#2a2520] bg-[#111111] p-3 cursor-help hover:border-[#c4841d]/30 transition-colors" data-testid="world-weather">
+            <div
+              className={`border border-[#2a2520] bg-[#111111] p-3 cursor-help hover:border-[#c4841d]/30 ${transition === 'weather' ? 'ring-1 ring-[#c4841d]/50' : ''}`}
+              style={{ transition: 'all 0.8s ease' }}
+              data-testid="world-weather"
+            >
               <div className="flex items-center gap-2 mb-1">
-                <span style={{ color: weatherColor }}>{WEATHER_ICONS[world.weather]}</span>
+                <span style={{ color: weatherColor, transition: 'color 0.8s ease' }}>{WEATHER_ICONS[world.weather]}</span>
                 <span className="text-[10px] font-mono uppercase tracking-widest text-[#88837a]">Weather</span>
               </div>
-              <p className="font-heading text-xl uppercase tracking-wider text-[#d4cfc4]">{world.weather}</p>
+              <p className="font-heading text-xl uppercase tracking-wider text-[#d4cfc4]" style={{ transition: 'color 0.5s ease' }}>{world.weather}</p>
               <div className="flex items-center gap-1 mt-0.5">
                 <Thermometer className="w-3 h-3 text-[#88837a]" />
-                <span className={`text-[10px] font-mono ${world.temperature < 0 ? 'text-[#3a6b8b]' : world.temperature > 30 ? 'text-[#8b3a3a]' : 'text-[#88837a]'}`}>
+                <span className={`text-[10px] font-mono ${world.temperature < 0 ? 'text-[#3a6b8b]' : world.temperature > 30 ? 'text-[#8b3a3a]' : 'text-[#88837a]'}`} style={{ transition: 'color 0.5s ease' }}>
                   {world.temperature}°C
                 </span>
               </div>
@@ -189,13 +231,14 @@ export default function WorldConditions() {
               <div className="absolute top-0 bottom-0 bg-[#1a1a3a]/40" style={{ left: 0, width: '20.8%' }} />
               {/* Day zone */}
               <div className="absolute top-0 bottom-0 bg-[#c4841d]/10" style={{ left: '20.8%', right: '16.7%' }} />
-              {/* Current position */}
+              {/* Current position — smoothly animated */}
               <div
-                className="absolute top-0 bottom-0 w-0.5 transition-all"
+                className="absolute top-0 bottom-0 w-0.5"
                 style={{
                   left: `${dayProgress}%`,
                   backgroundColor: isNightHour ? '#3a6b8b' : '#c4841d',
                   boxShadow: `0 0 6px ${isNightHour ? '#3a6b8b' : '#c4841d'}`,
+                  transition: 'left 2s ease, background-color 1s ease, box-shadow 1s ease',
                 }}
               />
             </div>

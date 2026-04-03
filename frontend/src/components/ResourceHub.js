@@ -46,7 +46,7 @@ function Tooltip({ children, text }) {
   );
 }
 
-export default function ResourceHub({ user }) {
+export default function ResourceHub({ user, liveScarcity, liveWorldState }) {
   const [tab, setTab] = useState('trade');
 
   const tabs = [
@@ -77,7 +77,7 @@ export default function ResourceHub({ user }) {
       {tab === 'trade' && <TradeBoard user={user} />}
       {tab === 'supply' && <SupplyBoard user={user} />}
       {tab === 'crafting' && <CraftingPlanner />}
-      {tab === 'resources' && <ScarcityIndex />}
+      {tab === 'resources' && <ScarcityIndex liveScarcity={liveScarcity} liveWorldState={liveWorldState} />}
     </div>
   );
 }
@@ -465,14 +465,29 @@ function CraftingPlanner() {
 
 
 // ==================== SCARCITY INDEX ====================
-function ScarcityIndex() {
-  const [resources, setResources] = useState([]);
+const TREND_ICONS = {
+  rising: { symbol: '\u25B2', color: 'text-[#8b3a3a]' },    // up arrow = prices rising = bad for buyers
+  falling: { symbol: '\u25BC', color: 'text-[#6b7a3d]' },   // down arrow = prices falling = good
+  stable: { symbol: '\u25C6', color: 'text-[#88837a]' },     // diamond = stable
+};
+
+function ScarcityIndex({ liveScarcity, liveWorldState }) {
+  const [apiResources, setApiResources] = useState([]);
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
-    api.get('/economy/resources').then(({ data }) => setResources(data)).catch(() => {});
+    api.get('/economy/resources').then(({ data }) => setApiResources(data)).catch(() => {});
   }, []);
 
+  // Merge live scarcity data over API data
+  const resources = liveScarcity
+    ? apiResources.map((r) => {
+        const live = liveScarcity.find((s) => s.name === r.name);
+        return live ? { ...r, ...live } : r;
+      })
+    : apiResources;
+
+  const isLive = !!liveScarcity;
   const categories = ['all', ...new Set(resources.map((r) => r.category))];
   const filtered = filter === 'all' ? resources : resources.filter((r) => r.category === filter);
 
@@ -482,6 +497,17 @@ function ScarcityIndex() {
         <div className="flex items-center gap-2 mb-2">
           <Package className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Scarcity Index</h3>
+          {isLive && (
+            <span className="flex items-center gap-1 text-[10px] font-mono text-[#6b7a3d]" data-testid="scarcity-live-indicator">
+              <RefreshCw className="w-3 h-3 animate-spin" style={{ animationDuration: '3s' }} />
+              LIVE
+            </span>
+          )}
+          {liveWorldState && (
+            <span className="text-[10px] font-mono text-[#88837a] ml-auto" data-testid="scarcity-conditions">
+              {liveWorldState.weather} / {liveWorldState.season} / {liveWorldState.time_of_day}
+            </span>
+          )}
         </div>
         <div className="flex gap-1 flex-wrap">
           {categories.map((c) => (
@@ -494,23 +520,49 @@ function ScarcityIndex() {
       <ScrollArea className="h-[450px]">
         <div className="p-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {filtered.map((r, i) => (
-              <Tooltip key={i} text={r.desc}>
-                <div className={`border p-2 bg-[#111111]/50 cursor-help hover:border-[#c4841d]/30 transition-colors ${RARITY_COLORS[r.rarity]?.split(' ')[1] || 'border-[#2a2520]'}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono text-[#d4cfc4]">{r.name}</span>
-                    <span className={`text-[10px] font-mono uppercase ${RARITY_COLORS[r.rarity]?.split(' ')[0] || 'text-[#88837a]'}`}>{r.rarity}</span>
-                  </div>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-[10px] font-mono text-[#88837a]">{CATEGORY_LABELS[r.category] || r.category}</span>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-mono ${SUPPLY_COLORS[r.supply_level] || 'text-[#88837a]'}`}>{r.supply_level}</span>
-                      <span className="text-xs font-mono text-[#c4841d] font-bold">{r.current_value}v</span>
+            {filtered.map((r, i) => {
+              const trend = TREND_ICONS[r.trend] || TREND_ICONS.stable;
+              const multiplier = r.multiplier || 1.0;
+              const isElevated = multiplier > 1.15;
+              const isDepressed = multiplier < 0.9;
+              return (
+                <Tooltip key={i} text={r.desc}>
+                  <div
+                    data-testid={`scarcity-item-${r.name?.replace(/\s+/g, '-').toLowerCase()}`}
+                    className={`border p-2 bg-[#111111]/50 cursor-help hover:border-[#c4841d]/30 ${RARITY_COLORS[r.rarity]?.split(' ')[1] || 'border-[#2a2520]'}`}
+                    style={{
+                      transition: 'all 0.6s ease',
+                      borderLeftWidth: isElevated ? '3px' : '1px',
+                      borderLeftColor: isElevated ? '#8b3a3a' : isDepressed ? '#6b7a3d' : undefined,
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono text-[#d4cfc4]">{r.name}</span>
+                      <span className={`text-[10px] font-mono uppercase ${RARITY_COLORS[r.rarity]?.split(' ')[0] || 'text-[#88837a]'}`}>{r.rarity}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[10px] font-mono text-[#88837a]">{CATEGORY_LABELS[r.category] || r.category}</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-mono ${SUPPLY_COLORS[r.supply_level] || 'text-[#88837a]'}`} style={{ transition: 'color 0.6s ease' }}>
+                          {r.supply_level}
+                        </span>
+                        <span className={`text-[10px] font-mono ${trend.color}`} data-testid={`trend-${r.name?.replace(/\s+/g, '-').toLowerCase()}`}>
+                          {trend.symbol}
+                        </span>
+                        <span className="text-xs font-mono text-[#c4841d] font-bold" style={{ transition: 'color 0.3s ease' }}>
+                          {r.current_value}v
+                        </span>
+                        {multiplier !== 1.0 && (
+                          <span className={`text-[10px] font-mono ${isElevated ? 'text-[#8b3a3a]' : 'text-[#6b7a3d]'}`}>
+                            x{multiplier}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Tooltip>
-            ))}
+                </Tooltip>
+              );
+            })}
           </div>
         </div>
       </ScrollArea>

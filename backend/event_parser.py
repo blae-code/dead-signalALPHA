@@ -30,6 +30,20 @@ PATTERNS = {
     'season_change': [
         re.compile(r'(?:season|weather)\s+(?:changed?|transition|now)\s+(?:to\s+)?(\w+)', re.IGNORECASE),
     ],
+    'weather_change': [
+        re.compile(r'weather\s+(?:changed?|set|switched|turned)\s+(?:to\s+)?(\w+)', re.IGNORECASE),
+        re.compile(r'(?:it\s+)?(?:started?|began?|stopped?)\s+(raining|snowing|storming|clearing)', re.IGNORECASE),
+        re.compile(r'(?:rain|snow|storm|fog|blizzard)\s+(?:started|stopped|ended|cleared)', re.IGNORECASE),
+    ],
+    'time_change': [
+        re.compile(r'(?:time|day)\s+(?:set|changed?|advanced?)\s+(?:to\s+)?(\d+)', re.IGNORECASE),
+        re.compile(r'(?:dawn|dusk|night|morning|noon|midnight)\s+(?:has\s+)?(?:arrived|fallen|begun|broken)', re.IGNORECASE),
+        re.compile(r'day\s+(\d+)\s+(?:has\s+)?(?:started|begun|dawned)', re.IGNORECASE),
+    ],
+    'environment': [
+        re.compile(r'(?:temperature|temp)\s+(?:dropped?|rose|fell|changed?)\s+(?:to\s+)?(-?\d+)', re.IGNORECASE),
+        re.compile(r'(?:visibility|wind)\s+(?:changed?|set|dropped?|increased?)', re.IGNORECASE),
+    ],
     'chat': [
         re.compile(r'\[(?:Chat|Global|All)\]\s*(.+?):\s*(.+)', re.IGNORECASE),
     ],
@@ -47,6 +61,9 @@ SEVERITY_MAP = {
     'horde_event': 'critical',
     'airdrop': 'high',
     'season_change': 'medium',
+    'weather_change': 'medium',
+    'time_change': 'low',
+    'environment': 'low',
     'chat': 'low',
     'server': 'medium',
     'unknown': 'low',
@@ -88,6 +105,12 @@ def parse_log_line(line: str) -> Optional[dict]:
                     event['details']['message'] = groups[1]
                 elif event_type == 'season_change' and groups:
                     event['details']['season'] = groups[0]
+                elif event_type == 'weather_change' and groups:
+                    event['details']['weather'] = groups[0]
+                elif event_type == 'time_change' and groups:
+                    event['details']['time'] = groups[0]
+                elif event_type == 'environment' and groups:
+                    event['details']['value'] = groups[0]
 
                 return event
 

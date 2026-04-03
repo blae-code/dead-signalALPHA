@@ -10,6 +10,8 @@ export function useServerWebSocket() {
   const [liveEvents, setLiveEvents] = useState([]);
   const [liveNarrations, setLiveNarrations] = useState([]);
   const [consoleLogs, setConsoleLogs] = useState([]);
+  const [worldState, setWorldState] = useState(null);
+  const [scarcityData, setScarcityData] = useState(null);
   const [connected, setConnected] = useState(false);
   const wsRef = useRef(null);
   const reconnectRef = useRef(null);
@@ -46,6 +48,12 @@ export function useServerWebSocket() {
             case 'console':
               setConsoleLogs((prev) => [...prev, msg.data].slice(-300));
               break;
+            case 'world_update':
+              setWorldState(msg.data);
+              break;
+            case 'scarcity_update':
+              setScarcityData(msg.data);
+              break;
             default:
               break;
           }
@@ -74,5 +82,5 @@ export function useServerWebSocket() {
     };
   }, [connect]);
 
-  return { liveStats, serverState, liveEvents, liveNarrations, consoleLogs, connected };
+  return { liveStats, serverState, liveEvents, liveNarrations, consoleLogs, worldState, scarcityData, connected };
 }

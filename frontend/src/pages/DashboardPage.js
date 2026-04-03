@@ -23,7 +23,7 @@ import {
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
-  const { liveStats, serverState, liveEvents, liveNarrations, consoleLogs, connected } = useServerWebSocket();
+  const { liveStats, serverState, liveEvents, liveNarrations, consoleLogs, worldState, scarcityData, connected } = useServerWebSocket();
   const [serverData, setServerData] = useState(null);
   const [events, setEvents] = useState([]);
   const [backups, setBackups] = useState([]);
@@ -239,7 +239,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-1 space-y-4">
                 <ServerStatus data={serverData} liveStats={liveStats} liveState={currentState} onRefresh={fetchServer} isAdmin={isAdmin} onlineCount={onlineCount} />
-                <WorldConditions />
+                <WorldConditions liveWorldState={worldState} />
               </div>
               <div className="lg:col-span-2 space-y-4">
                 <EventFeed events={allEvents} onRefresh={fetchEvents} serverOffline={currentState === 'offline' || currentState === 'stopped'} />
@@ -270,7 +270,7 @@ export default function DashboardPage() {
 
           {/* Economy Tab */}
           <TabsContent value="economy" className="mt-0">
-            <ResourceHub user={user} />
+            <ResourceHub user={user} liveScarcity={scarcityData} liveWorldState={worldState} />
           </TabsContent>
 
           {/* Game Master Tab */}
