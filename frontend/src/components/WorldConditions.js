@@ -98,7 +98,7 @@ export default function WorldConditions({ liveWorldState }) {
     }
     prevWeatherRef.current = world.weather;
     prevTimeRef.current = world.time_of_day;
-  }, [world?.weather, world?.time_of_day]);
+  }, [world]);
 
   if (!world) {
     return (

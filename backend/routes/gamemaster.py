@@ -12,6 +12,17 @@ router = APIRouter(prefix="/api/gm", tags=["gamemaster"])
 db = None
 get_current_user = None
 ptero = None
+ws_manager = None
+
+ALLOWED_TASK_ACTIONS = {'restart', 'broadcast', 'command', 'backup'}
+ALLOWED_NOTE_TYPES = {'info', 'warning', 'ban_reason', 'watchlist'}
+ALLOWED_PLAYER_ACTIONS = {'kick', 'ban', 'unban', 'whitelist', 'remove_whitelist', 'warn'}
+ALLOWED_TRIGGER_EVENTS = {
+    'player_connect', 'player_disconnect', 'player_death', 'player_kill',
+    'horde_event', 'airdrop', 'season_change', 'weather_change',
+    'time_change', 'environment', 'chat', 'server',
+}
+ALLOWED_TRIGGER_ACTIONS = {'broadcast', 'command'}
 
 
 # ==================== MODELS ====================
@@ -72,6 +83,21 @@ async def log_action(actor: str, action: str, details: dict):
     })
 
 
+def clean_text(value: str, field_name: str, *, min_len: int = 1, max_len: int = 200) -> str:
+    cleaned = (value or '').strip()
+    if len(cleaned) < min_len:
+        raise HTTPException(status_code=400, detail=f'{field_name} is required')
+    if len(cleaned) > max_len:
+        raise HTTPException(status_code=400, detail=f'{field_name} must be {max_len} characters or fewer')
+    return cleaned
+
+
+def ensure_allowed(value: str, allowed: set[str], field_name: str) -> str:
+    if value not in allowed:
+        raise HTTPException(status_code=400, detail=f'Invalid {field_name}')
+    return value
+
+
 # ==================== SCHEDULED TASKS ====================
 
 @router.get('/tasks')
@@ -83,8 +109,10 @@ async def list_tasks(request: Request):
 @router.post('/tasks')
 async def create_task(data: ScheduledTaskInput, request: Request):
     user = await require_admin(request)
-    if data.action not in ('restart', 'broadcast', 'command', 'backup'):
-        raise HTTPException(status_code=400, detail='Invalid action type')
+    ensure_allowed(data.action, ALLOWED_TASK_ACTIONS, 'action type')
+    name = clean_text(data.name, 'Task name', max_len=80)
+    if data.interval_minutes < 0 or data.interval_minutes > 10080:
+        raise HTTPException(status_code=400, detail='Interval must be between 0 and 10080 minutes')
 
     now = datetime.now(timezone.utc)
     task_id = str(ObjectId())
@@ -92,7 +120,7 @@ async def create_task(data: ScheduledTaskInput, request: Request):
 
     doc = {
         'task_id': task_id,
-        'name': data.name.strip(),
+        'name': name,
         'action': data.action,
         'params': data.params,
         'interval_minutes': data.interval_minutes,
@@ -114,26 +142,35 @@ async def update_task(task_id: str, data: ScheduledTaskUpdate, request: Request)
     user = await require_admin(request)
     updates = {}
     if data.name is not None:
-        updates['name'] = data.name.strip()
+        updates['name'] = clean_text(data.name, 'Task name', max_len=80)
     if data.params is not None:
         updates['params'] = data.params
     if data.interval_minutes is not None:
+        if data.interval_minutes < 0 or data.interval_minutes > 10080:
+            raise HTTPException(status_code=400, detail='Interval must be between 0 and 10080 minutes')
         updates['interval_minutes'] = data.interval_minutes
     if data.enabled is not None:
         updates['enabled'] = data.enabled
         if data.enabled:
-            interval = data.interval_minutes if data.interval_minutes is not None else 60
+            current = await db.scheduled_tasks.find_one({'task_id': task_id}, {'_id': 0, 'interval_minutes': 1})
+            if not current:
+                raise HTTPException(status_code=404, detail='Task not found')
+            interval = data.interval_minutes if data.interval_minutes is not None else current.get('interval_minutes', 60)
             updates['next_run'] = (datetime.now(timezone.utc) + timedelta(minutes=max(interval, 1))).isoformat()
 
     if updates:
-        await db.scheduled_tasks.update_one({'task_id': task_id}, {'$set': updates})
+        result = await db.scheduled_tasks.update_one({'task_id': task_id}, {'$set': updates})
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail='Task not found')
     await log_action(user.get('callsign', '?'), 'update_task', {'task_id': task_id})
     return {'message': 'Task updated'}
 
 @router.delete('/tasks/{task_id}')
 async def delete_task(task_id: str, request: Request):
     user = await require_admin(request)
-    await db.scheduled_tasks.delete_one({'task_id': task_id})
+    result = await db.scheduled_tasks.delete_one({'task_id': task_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Task not found')
     await log_action(user.get('callsign', '?'), 'delete_task', {'task_id': task_id})
     return {'message': 'Task deleted'}
 
@@ -141,10 +178,12 @@ async def delete_task(task_id: str, request: Request):
 async def run_task_now(task_id: str, request: Request):
     user = await require_admin(request)
     now = datetime.now(timezone.utc).isoformat()
-    await db.scheduled_tasks.update_one(
+    result = await db.scheduled_tasks.update_one(
         {'task_id': task_id},
         {'$set': {'next_run': now}}
     )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail='Task not found')
     await log_action(user.get('callsign', '?'), 'run_task_now', {'task_id': task_id})
     return {'message': 'Task queued for immediate execution'}
 
@@ -154,9 +193,7 @@ async def run_task_now(task_id: str, request: Request):
 @router.post('/broadcast')
 async def send_broadcast(data: BroadcastInput, request: Request):
     user = await require_admin(request)
-    msg = data.message.strip()
-    if not msg:
-        raise HTTPException(status_code=400, detail='Message cannot be empty')
+    msg = clean_text(data.message, 'Message', max_len=200)
 
     result = await ptero.send_command(f'say [DEAD SIGNAL] {msg}')
     now = datetime.now(timezone.utc).isoformat()
@@ -167,11 +204,11 @@ async def send_broadcast(data: BroadcastInput, request: Request):
         'timestamp': now,
     })
 
-    from server import ws_manager
-    await ws_manager.broadcast({
-        'type': 'gm_broadcast',
-        'data': {'message': msg, 'sent_by': user.get('callsign'), 'timestamp': now}
-    })
+    if ws_manager:
+        await ws_manager.broadcast({
+            'type': 'gm_broadcast',
+            'data': {'message': msg, 'sent_by': user.get('callsign'), 'timestamp': now}
+        })
 
     await log_action(user.get('callsign', '?'), 'broadcast', {'message': msg})
     return {'message': 'Broadcast sent', 'result': result}
@@ -197,8 +234,8 @@ async def create_quick_command(data: QuickCommandInput, request: Request):
     now = datetime.now(timezone.utc).isoformat()
     doc = {
         'cmd_id': str(ObjectId()),
-        'command': data.command.strip(),
-        'description': data.description.strip(),
+        'command': clean_text(data.command, 'Command', max_len=200),
+        'description': data.description.strip()[:200],
         'created_by': user.get('callsign', 'unknown'),
         'created_at': now,
     }
@@ -209,7 +246,9 @@ async def create_quick_command(data: QuickCommandInput, request: Request):
 @router.delete('/quick-commands/{cmd_id}')
 async def delete_quick_command(cmd_id: str, request: Request):
     await require_admin(request)
-    await db.gm_quick_commands.delete_one({'cmd_id': cmd_id})
+    result = await db.gm_quick_commands.delete_one({'cmd_id': cmd_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Command not found')
     return {'message': 'Command deleted'}
 
 @router.post('/quick-commands/{cmd_id}/execute')
@@ -269,8 +308,10 @@ async def get_player_profile(player_name: str, request: Request):
 @router.post('/players/action')
 async def player_action(data: PlayerActionInput, request: Request):
     user = await require_admin(request)
-    name = data.player_name.strip()
+    ensure_allowed(data.action, ALLOWED_PLAYER_ACTIONS, 'player action')
+    name = clean_text(data.player_name, 'Player name', max_len=80)
     now = datetime.now(timezone.utc).isoformat()
+    reason = data.reason.strip()[:300]
 
     if data.action == 'kick':
         await ptero.send_command(f'kick {name}')
@@ -279,7 +320,9 @@ async def player_action(data: PlayerActionInput, request: Request):
     elif data.action == 'unban':
         await ptero.send_command(f'unban {name}')
     elif data.action == 'warn':
-        await ptero.send_command(f'say [WARNING] {name}: {data.reason}')
+        if not reason:
+            raise HTTPException(status_code=400, detail='Warning reason is required')
+        await ptero.send_command(f'say [WARNING] {name}: {reason}')
     elif data.action in ('whitelist', 'remove_whitelist'):
         pass  # Track internally
 
@@ -296,7 +339,7 @@ async def player_action(data: PlayerActionInput, request: Request):
     if data.action == 'ban' and data.duration_hours > 0:
         update_fields['ban_expires'] = (datetime.now(timezone.utc) + timedelta(hours=data.duration_hours)).isoformat()
     if data.action == 'ban':
-        update_fields['ban_reason'] = data.reason
+        update_fields['ban_reason'] = reason
 
     await db.gm_players.update_one(
         {'player_name': name},
@@ -305,17 +348,17 @@ async def player_action(data: PlayerActionInput, request: Request):
     )
 
     # Add note
-    if data.reason:
+    if reason:
         await db.gm_player_notes.insert_one({
             'player_name': name,
-            'note': data.reason,
+            'note': reason,
             'note_type': 'ban_reason' if data.action == 'ban' else 'warning' if data.action == 'warn' else 'info',
             'author': user.get('callsign', 'unknown'),
             'timestamp': now,
         })
 
     await log_action(user.get('callsign', '?'), f'player_{data.action}', {
-        'player_name': name, 'reason': data.reason, 'duration_hours': data.duration_hours,
+        'player_name': name, 'reason': reason, 'duration_hours': data.duration_hours,
     })
     return {'message': f'{data.action} executed on {name}'}
 
@@ -323,9 +366,10 @@ async def player_action(data: PlayerActionInput, request: Request):
 async def add_player_note(data: PlayerNoteInput, request: Request):
     user = await require_admin(request)
     now = datetime.now(timezone.utc).isoformat()
+    ensure_allowed(data.note_type, ALLOWED_NOTE_TYPES, 'note type')
     doc = {
-        'player_name': data.player_name.strip(),
-        'note': data.note.strip(),
+        'player_name': clean_text(data.player_name, 'Player name', max_len=80),
+        'note': clean_text(data.note, 'Note', max_len=500),
         'note_type': data.note_type,
         'author': user.get('callsign', 'unknown'),
         'timestamp': now,
@@ -335,12 +379,12 @@ async def add_player_note(data: PlayerNoteInput, request: Request):
 
     # Ensure player record exists
     await db.gm_players.update_one(
-        {'player_name': data.player_name.strip()},
-        {'$set': {'updated_at': now}, '$setOnInsert': {'player_name': data.player_name.strip(), 'status': 'active', 'created_at': now}},
+        {'player_name': doc['player_name']},
+        {'$set': {'updated_at': now}, '$setOnInsert': {'player_name': doc['player_name'], 'status': 'active', 'created_at': now}},
         upsert=True,
     )
 
-    await log_action(user.get('callsign', '?'), 'add_note', {'player_name': data.player_name, 'type': data.note_type})
+    await log_action(user.get('callsign', '?'), 'add_note', {'player_name': doc['player_name'], 'type': data.note_type})
     return doc
 
 # ==================== EVENT TRIGGERS ====================
@@ -354,11 +398,16 @@ async def list_triggers(request: Request):
 @router.post('/triggers')
 async def create_trigger(data: EventTriggerInput, request: Request):
     user = await require_admin(request)
+    ensure_allowed(data.trigger_event, ALLOWED_TRIGGER_EVENTS, 'trigger event')
+    ensure_allowed(data.action, ALLOWED_TRIGGER_ACTIONS, 'trigger action')
+    name = clean_text(data.name, 'Trigger name', max_len=80)
+    if data.cooldown_seconds < 0 or data.cooldown_seconds > 86400:
+        raise HTTPException(status_code=400, detail='Cooldown must be between 0 and 86400 seconds')
     now = datetime.now(timezone.utc).isoformat()
     trigger_id = str(ObjectId())
     doc = {
         'trigger_id': trigger_id,
-        'name': data.name.strip(),
+        'name': name,
         'trigger_event': data.trigger_event,
         'action': data.action,
         'params': data.params,
@@ -376,18 +425,30 @@ async def create_trigger(data: EventTriggerInput, request: Request):
 
 @router.patch('/triggers/{trigger_id}')
 async def update_trigger(trigger_id: str, request: Request):
-    user = await require_admin(request)
+    await require_admin(request)
     body = await request.json()
     allowed = {'name', 'trigger_event', 'action', 'params', 'enabled', 'cooldown_seconds'}
     updates = {k: v for k, v in body.items() if k in allowed}
+    if 'name' in updates:
+        updates['name'] = clean_text(updates['name'], 'Trigger name', max_len=80)
+    if 'trigger_event' in updates:
+        ensure_allowed(updates['trigger_event'], ALLOWED_TRIGGER_EVENTS, 'trigger event')
+    if 'action' in updates:
+        ensure_allowed(updates['action'], ALLOWED_TRIGGER_ACTIONS, 'trigger action')
+    if 'cooldown_seconds' in updates and (updates['cooldown_seconds'] < 0 or updates['cooldown_seconds'] > 86400):
+        raise HTTPException(status_code=400, detail='Cooldown must be between 0 and 86400 seconds')
     if updates:
-        await db.gm_triggers.update_one({'trigger_id': trigger_id}, {'$set': updates})
+        result = await db.gm_triggers.update_one({'trigger_id': trigger_id}, {'$set': updates})
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail='Trigger not found')
     return {'message': 'Trigger updated'}
 
 @router.delete('/triggers/{trigger_id}')
 async def delete_trigger(trigger_id: str, request: Request):
     user = await require_admin(request)
-    await db.gm_triggers.delete_one({'trigger_id': trigger_id})
+    result = await db.gm_triggers.delete_one({'trigger_id': trigger_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Trigger not found')
     await log_action(user.get('callsign', '?'), 'delete_trigger', {'trigger_id': trigger_id})
     return {'message': 'Trigger deleted'}
 
@@ -426,9 +487,10 @@ async def gm_stats(request: Request):
     }
 
 
-def init_gm_routes(database, auth_func, ptero_client):
-    global db, get_current_user, ptero
+def init_gm_routes(database, auth_func, ptero_client, ws_broadcast_manager=None):
+    global db, get_current_user, ptero, ws_manager
     db = database
     get_current_user = auth_func
     ptero = ptero_client
+    ws_manager = ws_broadcast_manager
     return router

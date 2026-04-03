@@ -1,9 +1,8 @@
 import axios from 'axios';
-
-const API_BASE = process.env.REACT_APP_BACKEND_URL;
+import { API_BASE, API_ROOT } from '@/lib/runtime-config';
 
 const api = axios.create({
-  baseURL: `${API_BASE}/api`,
+  baseURL: API_ROOT,
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -15,7 +14,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401 && !err.config._retry) {
       err.config._retry = true;
       try {
-        await axios.post(`${API_BASE}/api/auth/refresh`, {}, { withCredentials: true });
+        await axios.post(`${API_ROOT}/auth/refresh`, {}, { withCredentials: true });
         return api(err.config);
       } catch {
         // Refresh failed, user needs to re-login

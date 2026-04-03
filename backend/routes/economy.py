@@ -56,6 +56,10 @@ CRAFTING_RECIPES = [
     {'name': 'Molotov Cocktail', 'category': 'weapons', 'ingredients': [{'item': 'Fuel Can', 'qty': 1}, {'item': 'Bandage', 'qty': 1}], 'result': 'Molotov Cocktail', 'result_qty': 2, 'difficulty': 'easy', 'desc': 'Area denial weapon. Sets zombies on fire. Risk of spreading.'},
 ]
 
+RESOURCE_NAMES = {resource['name'] for resource in RESOURCES}
+ALLOWED_TRADE_ACTIONS = {'claim', 'complete', 'cancel'}
+ALLOWED_PRIORITIES = {'low', 'normal', 'urgent'}
+
 
 class TradePostInput(BaseModel):
     offering: List[dict]    # [{item, qty}]
@@ -69,6 +73,27 @@ class SupplyRequestInput(BaseModel):
     items: List[dict]  # [{item, qty}]
     priority: str = 'normal'  # low, normal, urgent
     notes: str = ''
+
+
+def normalize_trade_items(items: List[dict], field_name: str) -> List[dict]:
+    if not isinstance(items, list):
+        raise HTTPException(status_code=400, detail=f'{field_name} must be a list')
+
+    normalized = {}
+    for entry in items:
+        if not isinstance(entry, dict):
+            raise HTTPException(status_code=400, detail=f'Each {field_name} entry must be an object')
+        item_name = str(entry.get('item', '')).strip()
+        qty = entry.get('qty')
+
+        if item_name not in RESOURCE_NAMES:
+            raise HTTPException(status_code=400, detail=f'Invalid resource in {field_name}: {item_name or "unknown"}')
+        if not isinstance(qty, int) or qty < 1 or qty > 999:
+            raise HTTPException(status_code=400, detail=f'Quantity for {item_name} must be an integer between 1 and 999')
+
+        normalized[item_name] = normalized.get(item_name, 0) + qty
+
+    return [{'item': item, 'qty': qty} for item, qty in normalized.items()]
 
 
 # ==================== RESOURCES ====================
@@ -121,7 +146,9 @@ async def create_trade(data: TradePostInput, request: Request):
     uid = user['_id']
     now = datetime.now(timezone.utc).isoformat()
 
-    if not data.offering and not data.requesting:
+    offering = normalize_trade_items(data.offering, 'offering')
+    requesting = normalize_trade_items(data.requesting, 'requesting')
+    if not offering and not requesting:
         raise HTTPException(status_code=400, detail='Must offer or request something')
 
     # Get faction info
@@ -133,8 +160,8 @@ async def create_trade(data: TradePostInput, request: Request):
         'poster_callsign': user.get('callsign', 'Unknown'),
         'poster_faction': membership.get('faction_id') if membership else None,
         'poster_faction_tag': None,
-        'offering': data.offering,
-        'requesting': data.requesting,
+        'offering': offering,
+        'requesting': requesting,
         'notes': data.notes.strip()[:200],
         'status': 'open',
         'claimed_by': None,
@@ -155,6 +182,8 @@ async def respond_trade(trade_id: str, data: TradeResponseInput, request: Reques
     user = await get_current_user(request)
     uid = user['_id']
     now = datetime.now(timezone.utc).isoformat()
+    if data.action not in ALLOWED_TRADE_ACTIONS:
+        raise HTTPException(status_code=400, detail='Invalid trade action')
 
     trade = await db.trades.find_one({'trade_id': trade_id})
     if not trade:
@@ -169,21 +198,27 @@ async def respond_trade(trade_id: str, data: TradeResponseInput, request: Reques
             {'trade_id': trade_id},
             {'$set': {'status': 'claimed', 'claimed_by': user.get('callsign', 'Unknown'), 'claimed_at': now}}
         )
+        return {'message': 'Trade claimed'}
     elif data.action == 'complete':
+        if trade['status'] != 'claimed':
+            raise HTTPException(status_code=400, detail='Only claimed trades can be completed')
         if trade['poster_id'] != uid and trade.get('claimed_by') != user.get('callsign'):
             raise HTTPException(status_code=403, detail='Only trade parties can complete')
         await db.trades.update_one(
             {'trade_id': trade_id},
             {'$set': {'status': 'completed', 'completed_at': now}}
         )
+        return {'message': 'Trade completed'}
     elif data.action == 'cancel':
+        if trade['status'] not in {'open', 'claimed'}:
+            raise HTTPException(status_code=400, detail='Trade can no longer be cancelled')
         if trade['poster_id'] != uid:
             raise HTTPException(status_code=403, detail='Only poster can cancel')
         await db.trades.update_one(
             {'trade_id': trade_id},
             {'$set': {'status': 'cancelled'}}
         )
-    return {'message': f'Trade {data.action}ed'}
+        return {'message': 'Trade cancelled'}
 
 
 # ==================== SUPPLY REQUESTS ====================
@@ -201,6 +236,11 @@ async def create_supply_request(data: SupplyRequestInput, request: Request):
     user = await get_current_user(request)
     uid = user['_id']
     now = datetime.now(timezone.utc).isoformat()
+    if data.priority not in ALLOWED_PRIORITIES:
+        raise HTTPException(status_code=400, detail='Invalid priority')
+    items = normalize_trade_items(data.items, 'items')
+    if not items:
+        raise HTTPException(status_code=400, detail='At least one requested item is required')
 
     membership = await db.faction_members.find_one({'user_id': uid, 'status': 'active'}, {'_id': 0})
 
@@ -209,7 +249,7 @@ async def create_supply_request(data: SupplyRequestInput, request: Request):
         'requester_id': uid,
         'requester_callsign': user.get('callsign', 'Unknown'),
         'faction_id': membership.get('faction_id') if membership else None,
-        'items': data.items,
+        'items': items,
         'priority': data.priority,
         'notes': data.notes.strip()[:200],
         'status': 'open',
@@ -224,10 +264,12 @@ async def create_supply_request(data: SupplyRequestInput, request: Request):
 async def fulfill_supply_request(request_id: str, request: Request):
     user = await get_current_user(request)
     now = datetime.now(timezone.utc).isoformat()
-    await db.supply_requests.update_one(
+    result = await db.supply_requests.update_one(
         {'request_id': request_id, 'status': 'open'},
         {'$set': {'status': 'fulfilled', 'fulfilled_by': user.get('callsign', 'Unknown'), 'fulfilled_at': now}}
     )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail='Open supply request not found')
     return {'message': 'Request fulfilled'}
 
 

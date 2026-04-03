@@ -1,8 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-
-const WS_BASE = process.env.REACT_APP_BACKEND_URL
-  .replace('https://', 'wss://')
-  .replace('http://', 'ws://');
+import { WS_BASE } from '@/lib/runtime-config';
 
 export function useServerWebSocket() {
   const [liveStats, setLiveStats] = useState(null);
@@ -15,8 +12,10 @@ export function useServerWebSocket() {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef(null);
   const reconnectRef = useRef(null);
+  const shouldReconnectRef = useRef(true);
 
   const connect = useCallback(() => {
+    if (!WS_BASE || !shouldReconnectRef.current) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     try {
@@ -63,7 +62,9 @@ export function useServerWebSocket() {
       ws.onclose = () => {
         setConnected(false);
         wsRef.current = null;
-        reconnectRef.current = setTimeout(connect, 5000);
+        if (shouldReconnectRef.current) {
+          reconnectRef.current = setTimeout(connect, 5000);
+        }
       };
 
       ws.onerror = () => {
@@ -75,8 +76,10 @@ export function useServerWebSocket() {
   }, []);
 
   useEffect(() => {
+    shouldReconnectRef.current = true;
     connect();
     return () => {
+      shouldReconnectRef.current = false;
       clearTimeout(reconnectRef.current);
       wsRef.current?.close();
     };

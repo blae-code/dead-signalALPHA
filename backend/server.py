@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 import json
 import asyncio
+from pathlib import Path
 
 from pterodactyl import PterodactylClient
 from event_parser import parse_log_line
@@ -29,6 +30,32 @@ from scheduler import Scheduler
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+APP_ENV = os.environ.get('APP_ENV', 'development').strip().lower()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+MEMORY_DIR = Path(os.environ.get('MEMORY_DIR', str(PROJECT_ROOT / 'memory')))
+WRITE_DEBUG_CREDENTIALS = os.environ.get('WRITE_DEBUG_CREDENTIALS', '').strip().lower() == 'true'
+RETURN_AUTH_TOKENS = os.environ.get('RETURN_AUTH_TOKENS', '').strip().lower() == 'true'
+
+
+def _parse_bool_env(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _parse_cookie_samesite() -> str:
+    default = 'none' if APP_ENV == 'production' else 'lax'
+    value = os.environ.get('COOKIE_SAMESITE', default).strip().lower()
+    if value not in {'lax', 'strict', 'none'}:
+        raise RuntimeError("COOKIE_SAMESITE must be one of: lax, strict, none")
+    return value
+
+
+COOKIE_SECURE = _parse_bool_env('COOKIE_SECURE', APP_ENV == 'production')
+COOKIE_SAMESITE = _parse_cookie_samesite()
+COOKIE_DOMAIN = os.environ.get('COOKIE_DOMAIN', '').strip() or None
+
 # MongoDB
 mongo_url = os.environ['MONGO_URL']
 mongo_client = AsyncIOMotorClient(mongo_url)
@@ -43,14 +70,26 @@ app = FastAPI(title="Dead Signal API")
 api_router = APIRouter(prefix="/api")
 
 JWT_ALGORITHM = "HS256"
+MAX_LIST_LIMIT = 200
 
 # ==================== CORS ====================
-cors_origins_raw = os.environ.get('CORS_ORIGINS', '*')
-cors_origins = ['*'] if cors_origins_raw == '*' else [o.strip() for o in cors_origins_raw.split(',')]
+def _parse_cors_config():
+    raw = os.environ.get('CORS_ORIGINS', '').strip()
+    if raw == '*':
+        logger.warning("CORS_ORIGINS='*' disables credentialed browser auth. Set explicit origins for production.")
+        return ['*'], False
+    if raw:
+        return [o.strip() for o in raw.split(',') if o.strip()], True
+    if APP_ENV == 'production':
+        return [], True
+    return ['http://localhost:3000', 'http://127.0.0.1:3000'], True
+
+
+cors_origins, cors_allow_credentials = _parse_cors_config()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_credentials=True,
+    allow_credentials=cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -63,7 +102,26 @@ import string
 KEY_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
 def get_jwt_secret():
-    return os.environ.get('JWT_SECRET', 'fallback-secret-change-me')
+    secret = os.environ.get('JWT_SECRET', '').strip()
+    if secret:
+        return secret
+    if APP_ENV == 'production':
+        raise RuntimeError('JWT_SECRET must be configured in production')
+    logger.warning('JWT_SECRET not set; using insecure development fallback secret')
+    return 'dev-only-fallback-secret'
+
+
+def clamp_limit(limit: int, default: int = 50, maximum: int = MAX_LIST_LIMIT) -> int:
+    if limit is None:
+        return default
+    return max(1, min(limit, maximum))
+
+
+def parse_object_id(value: str, field_name: str = 'id') -> ObjectId:
+    try:
+        return ObjectId(value)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f'Invalid {field_name}') from exc
 
 def hash_key(raw: str) -> str:
     return bcrypt.hashpw(raw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -88,19 +146,32 @@ def create_refresh_token(user_id: str) -> str:
         get_jwt_secret(), algorithm=JWT_ALGORITHM
     )
 
-async def get_current_user(request: Request) -> dict:
+def _extract_token_from_request(request: Request) -> Optional[str]:
     token = request.cookies.get('access_token')
     if not token:
         auth = request.headers.get('Authorization', '')
         if auth.startswith('Bearer '):
             token = auth[7:]
+    return token
+
+
+def _extract_token_from_websocket(websocket: WebSocket) -> Optional[str]:
+    token = websocket.cookies.get('access_token')
     if not token:
-        raise HTTPException(status_code=401, detail='Not authenticated')
+        auth = websocket.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            token = auth[7:]
+    if not token:
+        token = websocket.query_params.get('token')
+    return token
+
+
+async def _get_user_from_token(token: str, expected_type: str = 'access') -> dict:
     try:
         payload = pyjwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
-        if payload.get('type') != 'access':
+        if payload.get('type') != expected_type:
             raise HTTPException(status_code=401, detail='Invalid token type')
-        user = await db.users.find_one({'_id': ObjectId(payload['sub'])})
+        user = await db.users.find_one({'_id': parse_object_id(payload.get('sub', ''), 'token payload')})
         if not user:
             raise HTTPException(status_code=401, detail='User not found')
         if user.get('status') != 'active':
@@ -108,14 +179,77 @@ async def get_current_user(request: Request) -> dict:
         user['_id'] = str(user['_id'])
         user.pop('auth_key_hash', None)
         return user
-    except pyjwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail='Token expired')
-    except pyjwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail='Invalid token')
+    except HTTPException as exc:
+        if exc.status_code == 400:
+            raise HTTPException(status_code=401, detail='Invalid token') from exc
+        raise
+    except pyjwt.ExpiredSignatureError as exc:
+        raise HTTPException(status_code=401, detail='Token expired') from exc
+    except pyjwt.InvalidTokenError as exc:
+        raise HTTPException(status_code=401, detail='Invalid token') from exc
+
+
+async def get_current_user(request: Request) -> dict:
+    token = _extract_token_from_request(request)
+    if not token:
+        raise HTTPException(status_code=401, detail='Not authenticated')
+    return await _get_user_from_token(token, expected_type='access')
+
+
+async def get_current_ws_user(websocket: WebSocket) -> dict:
+    token = _extract_token_from_websocket(websocket)
+    if not token:
+        raise HTTPException(status_code=401, detail='Not authenticated')
+    return await _get_user_from_token(token, expected_type='access')
+
+
+async def require_server_admin(request: Request) -> dict:
+    user = await get_current_user(request)
+    if user.get('role') not in ('system_admin', 'server_admin'):
+        raise HTTPException(status_code=403, detail='Admin access required')
+    return user
+
+
+def unwrap_service_result(result: dict, *, status_code: int = 502) -> dict:
+    if not isinstance(result, dict):
+        return result
+    if result.get('configured') is False:
+        raise HTTPException(status_code=503, detail='Pterodactyl is not configured')
+    if result.get('error'):
+        detail = result.get('detail') or result['error']
+        raise HTTPException(status_code=status_code, detail=detail)
+    return result
+
+
+def build_auth_response(user_id: str, callsign: str, role: str, access_token: str, **extra) -> dict:
+    response = {
+        'id': user_id,
+        'callsign': callsign,
+        'role': role,
+        **extra,
+    }
+    if RETURN_AUTH_TOKENS:
+        response['token'] = access_token
+    return response
+
+
+def cookie_settings(max_age: Optional[int] = None) -> dict:
+    settings = {
+        'httponly': True,
+        'secure': COOKIE_SECURE,
+        'samesite': COOKIE_SAMESITE,
+        'path': '/',
+    }
+    if max_age is not None:
+        settings['max_age'] = max_age
+    if COOKIE_DOMAIN:
+        settings['domain'] = COOKIE_DOMAIN
+    return settings
+
 
 def set_auth_cookies(response: Response, access: str, refresh: str):
-    response.set_cookie(key='access_token', value=access, httponly=True, secure=True, samesite='none', max_age=43200, path='/')
-    response.set_cookie(key='refresh_token', value=refresh, httponly=True, secure=True, samesite='none', max_age=2592000, path='/')
+    response.set_cookie(key='access_token', value=access, **cookie_settings(max_age=43200))
+    response.set_cookie(key='refresh_token', value=refresh, **cookie_settings(max_age=2592000))
 
 # ==================== PYDANTIC MODELS ====================
 
@@ -183,18 +317,17 @@ async def setup(data: SetupInput, response: Response):
     rt = create_refresh_token(uid)
     set_auth_cookies(response, at, rt)
 
-    # Write test credentials
     _write_credentials(callsign, raw_key, 'system_admin')
 
     logger.info(f'System admin created: {callsign}')
-    return {
-        'id': uid,
-        'callsign': callsign,
-        'role': 'system_admin',
-        'auth_key': raw_key,
-        'message': 'SAVE THIS KEY. It will not be shown again.',
-        'token': at,
-    }
+    return build_auth_response(
+        uid,
+        callsign,
+        'system_admin',
+        at,
+        auth_key=raw_key,
+        message='SAVE THIS KEY. It will not be shown again.',
+    )
 
 @api_router.post('/auth/login')
 async def login(data: LoginInput, request: Request, response: Response):
@@ -227,12 +360,12 @@ async def login(data: LoginInput, request: Request, response: Response):
     at = create_access_token(uid, callsign, role)
     rt = create_refresh_token(uid)
     set_auth_cookies(response, at, rt)
-    return {'id': uid, 'callsign': callsign, 'role': role, 'token': at}
+    return build_auth_response(uid, callsign, role, at)
 
 @api_router.post('/auth/logout')
 async def logout(response: Response):
-    response.delete_cookie('access_token', path='/')
-    response.delete_cookie('refresh_token', path='/')
+    response.delete_cookie('access_token', **cookie_settings())
+    response.delete_cookie('refresh_token', **cookie_settings())
     return {'message': 'Logged out'}
 
 @api_router.get('/auth/me')
@@ -248,7 +381,7 @@ async def refresh(request: Request, response: Response):
         payload = pyjwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
         if payload.get('type') != 'refresh':
             raise HTTPException(status_code=401, detail='Invalid token type')
-        user = await db.users.find_one({'_id': ObjectId(payload['sub'])})
+        user = await db.users.find_one({'_id': parse_object_id(payload.get('sub', ''), 'token payload')})
         if not user:
             raise HTTPException(status_code=401, detail='User not found')
         if user.get('status') != 'active':
@@ -256,7 +389,11 @@ async def refresh(request: Request, response: Response):
         uid = str(user['_id'])
         at = create_access_token(uid, user['callsign'], user.get('role', 'player'))
         set_auth_cookies(response, at, create_refresh_token(uid))
-        return {'message': 'Refreshed', 'token': at}
+        return {'message': 'Refreshed', **({'token': at} if RETURN_AUTH_TOKENS else {})}
+    except HTTPException as exc:
+        if exc.status_code == 400:
+            raise HTTPException(status_code=401, detail='Invalid refresh token') from exc
+        raise
     except pyjwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail='Refresh token expired')
     except pyjwt.InvalidTokenError:
@@ -315,13 +452,13 @@ async def reissue_key(user_id: str, request: Request):
     if user.get('role') != 'system_admin':
         raise HTTPException(status_code=403, detail='System admin access required')
 
-    target = await db.users.find_one({'_id': ObjectId(user_id)})
+    target = await db.users.find_one({'_id': parse_object_id(user_id, 'user id')})
     if not target:
         raise HTTPException(status_code=404, detail='User not found')
 
     raw_key = generate_auth_key()
     await db.users.update_one(
-        {'_id': ObjectId(user_id)},
+        {'_id': parse_object_id(user_id, 'user id')},
         {'$set': {'auth_key_hash': hash_key(raw_key), 'status': 'active'}},
     )
     return {
@@ -337,7 +474,7 @@ async def suspend_key(user_id: str, request: Request):
         raise HTTPException(status_code=403, detail='System admin access required')
     if user_id == user.get('_id'):
         raise HTTPException(status_code=400, detail='Cannot suspend your own account')
-    await db.users.update_one({'_id': ObjectId(user_id)}, {'$set': {'status': 'suspended'}})
+    await db.users.update_one({'_id': parse_object_id(user_id, 'user id')}, {'$set': {'status': 'suspended'}})
     return {'message': 'Key suspended'}
 
 @api_router.post('/admin/keys/{user_id}/activate')
@@ -345,7 +482,7 @@ async def activate_key(user_id: str, request: Request):
     user = await get_current_user(request)
     if user.get('role') != 'system_admin':
         raise HTTPException(status_code=403, detail='System admin access required')
-    await db.users.update_one({'_id': ObjectId(user_id)}, {'$set': {'status': 'active'}})
+    await db.users.update_one({'_id': parse_object_id(user_id, 'user id')}, {'$set': {'status': 'active'}})
     return {'message': 'Key activated'}
 
 @api_router.post('/admin/keys/{user_id}/revoke')
@@ -355,7 +492,7 @@ async def revoke_key(user_id: str, request: Request):
         raise HTTPException(status_code=403, detail='System admin access required')
     if user_id == user.get('_id'):
         raise HTTPException(status_code=400, detail='Cannot revoke your own account')
-    await db.users.update_one({'_id': ObjectId(user_id)}, {'$set': {'status': 'revoked'}})
+    await db.users.update_one({'_id': parse_object_id(user_id, 'user id')}, {'$set': {'status': 'revoked'}})
     return {'message': 'Key permanently revoked'}
 
 @api_router.delete('/admin/keys/{user_id}')
@@ -365,37 +502,121 @@ async def delete_key(user_id: str, request: Request):
         raise HTTPException(status_code=403, detail='System admin access required')
     if user_id == user.get('_id'):
         raise HTTPException(status_code=400, detail='Cannot delete your own account')
-    await db.users.delete_one({'_id': ObjectId(user_id)})
+    await db.users.delete_one({'_id': parse_object_id(user_id, 'user id')})
     return {'message': 'User deleted'}
 
 # ==================== SERVER ROUTES ====================
 
+async def mongo_health() -> dict:
+    try:
+        await mongo_client.admin.command('ping')
+        return {'ok': True}
+    except Exception as exc:
+        return {'ok': False, 'detail': str(exc)}
+
+
+async def build_health_snapshot() -> dict:
+    mongo = await mongo_health()
+    pterodactyl_ready = ptero.configured
+    narrator_ready = narrator.configured
+    scheduler_running = bool(globals().get('scheduler') and scheduler.running)
+
+    warnings = []
+    if not pterodactyl_ready:
+        warnings.append('Pterodactyl is not configured; server control and live relay features will be degraded.')
+    if not narrator_ready:
+        warnings.append('EMERGENT_LLM_KEY is not configured; AI narration will fall back to static text.')
+    if cors_allow_credentials and cors_origins == ['*']:
+        warnings.append('Credentialed CORS cannot use wildcard origins. Set explicit CORS_ORIGINS.')
+    if COOKIE_SAMESITE == 'none' and not COOKIE_SECURE:
+        warnings.append('SameSite=None cookies require Secure=true in modern browsers.')
+
+    ready = mongo['ok']
+    return {
+        'status': 'ready' if ready else 'not_ready',
+        'app_env': APP_ENV,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'checks': {
+            'mongo': mongo,
+            'pterodactyl': {'configured': pterodactyl_ready, 'ws_running': ptero_ws.running},
+            'ai_narrator': {'configured': narrator_ready},
+            'scheduler': {'running': scheduler_running},
+        },
+        'runtime': {
+            'cors_origins': cors_origins,
+            'cors_allow_credentials': cors_allow_credentials,
+            'cookie_secure': COOKIE_SECURE,
+            'cookie_samesite': COOKIE_SAMESITE,
+            'cookie_domain': COOKIE_DOMAIN,
+            'return_auth_tokens': RETURN_AUTH_TOKENS,
+        },
+        'connections': {
+            'websocket_clients': len(ws_manager.active),
+        },
+        'warnings': warnings,
+    }
+
+
+@api_router.get('/health/live')
+async def health_live():
+    return {
+        'status': 'alive',
+        'app_env': APP_ENV,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@api_router.get('/health/ready')
+async def health_ready(response: Response):
+    snapshot = await build_health_snapshot()
+    if snapshot['status'] != 'ready':
+        response.status_code = 503
+    return {
+        'status': snapshot['status'],
+        'timestamp': snapshot['timestamp'],
+        'checks': snapshot['checks'],
+        'warnings': snapshot['warnings'],
+    }
+
+
+@api_router.get('/health/details')
+async def health_details(response: Response):
+    snapshot = await build_health_snapshot()
+    if snapshot['status'] != 'ready':
+        response.status_code = 503
+    return snapshot
+
 @api_router.get('/server/status')
 async def server_status(request: Request):
     await get_current_user(request)
+    if not ptero.configured:
+        return {'details': None, 'resources': None, 'configured': False}
     details = await ptero.get_server_details()
     resources = await ptero.get_resources()
-    return {'details': details, 'resources': resources, 'configured': ptero.configured}
+    return {
+        'details': unwrap_service_result(details),
+        'resources': unwrap_service_result(resources),
+        'configured': ptero.configured,
+    }
 
 @api_router.post('/server/power')
 async def server_power(data: PowerAction, request: Request):
-    user = await get_current_user(request)
-    if user.get('role') not in ('system_admin', 'server_admin'):
-        raise HTTPException(status_code=403, detail='Admin access required')
+    await require_server_admin(request)
     if data.signal not in ('start', 'stop', 'restart', 'kill'):
         raise HTTPException(status_code=400, detail='Invalid power signal')
-    return await ptero.send_power_action(data.signal)
+    return unwrap_service_result(await ptero.send_power_action(data.signal))
 
 @api_router.post('/server/command')
 async def send_command(data: CommandInput, request: Request):
-    user = await get_current_user(request)
-    if user.get('role') not in ('system_admin', 'server_admin'):
-        raise HTTPException(status_code=403, detail='Admin access required')
-    result = await ptero.send_command(data.command)
+    user = await require_server_admin(request)
+    command = data.command.strip()
+    if not command:
+        raise HTTPException(status_code=400, detail='Command cannot be empty')
+    result = unwrap_service_result(await ptero.send_command(command))
     await db.command_log.insert_one({
-        'command': data.command,
+        'command': command,
         'user_id': user.get('_id', ''),
-        'user_name': user.get('name', ''),
+        'user_name': user.get('callsign', ''),
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'result': 'success' if result.get('success') else 'error',
     })
@@ -403,33 +624,30 @@ async def send_command(data: CommandInput, request: Request):
 
 @api_router.get('/server/files')
 async def list_files(request: Request, directory: str = '/'):
-    await get_current_user(request)
-    return await ptero.list_files(directory)
+    await require_server_admin(request)
+    return unwrap_service_result(await ptero.list_files(directory))
 
 @api_router.get('/server/files/contents')
 async def get_file(request: Request, file: str = ''):
-    user = await get_current_user(request)
-    if user.get('role') not in ('system_admin', 'server_admin'):
-        raise HTTPException(status_code=403, detail='Admin access required')
-    return await ptero.get_file_contents(file)
+    await require_server_admin(request)
+    return unwrap_service_result(await ptero.get_file_contents(file))
 
 @api_router.get('/server/backups')
 async def list_backups(request: Request):
-    await get_current_user(request)
-    return await ptero.list_backups()
+    await require_server_admin(request)
+    return unwrap_service_result(await ptero.list_backups())
 
 @api_router.post('/server/backups')
 async def create_backup(request: Request):
-    user = await get_current_user(request)
-    if user.get('role') not in ('system_admin', 'server_admin'):
-        raise HTTPException(status_code=403, detail='Admin access required')
-    return await ptero.create_backup()
+    await require_server_admin(request)
+    return unwrap_service_result(await ptero.create_backup())
 
 # ==================== EVENT ROUTES ====================
 
 @api_router.get('/events')
 async def get_events(request: Request, limit: int = 50, event_type: Optional[str] = None):
     await get_current_user(request)
+    limit = clamp_limit(limit, default=50)
     query = {}
     if event_type:
         query['type'] = event_type
@@ -501,6 +719,7 @@ async def ambient(request: Request, time_of_day: str = 'dawn'):
 @api_router.get('/narrative/history')
 async def narrative_history(request: Request, limit: int = 20):
     await get_current_user(request)
+    limit = clamp_limit(limit, default=20)
     narrs = await db.narratives.find({}, {'_id': 0}).sort('timestamp', -1).limit(limit).to_list(limit)
     return narrs
 
@@ -584,6 +803,11 @@ ptero_ws = PterodactylWSConsumer(db, ws_manager)
 
 @app.websocket('/api/ws/feed')
 async def ws_feed(websocket: WebSocket):
+    try:
+        await get_current_ws_user(websocket)
+    except HTTPException:
+        await websocket.close(code=4401)
+        return
     await ws_manager.connect(websocket)
     try:
         while True:
@@ -622,23 +846,31 @@ async def live_stats(request: Request):
 @api_router.get('/server/console-log')
 async def console_log(request: Request, limit: int = 100):
     await get_current_user(request)
+    limit = clamp_limit(limit, default=100)
     return ptero_ws.console_buffer[-limit:]
 
 # ==================== STARTUP ====================
 
 def _write_credentials(callsign, raw_key, role):
-    os.makedirs('/app/memory', exist_ok=True)
-    with open('/app/memory/test_credentials.md', 'w') as f:
-        f.write('# Dead Signal Test Credentials\n\n')
-        f.write(f'## System Admin\n- Callsign: {callsign}\n- Auth Key: {raw_key}\n- Role: {role}\n\n')
-        f.write('## Auth Flow\n- GET /api/auth/setup-status — check if setup needed\n')
-        f.write('- POST /api/auth/setup — first-time setup (callsign + setup_secret)\n')
-        f.write('- POST /api/auth/login — login (callsign + auth_key)\n')
-        f.write('- POST /api/auth/logout\n- GET /api/auth/me\n- POST /api/auth/refresh\n\n')
-        f.write(f'## Setup Secret (env): {os.environ.get("SETUP_SECRET", "")}\n')
+    if not WRITE_DEBUG_CREDENTIALS:
+        return
+    MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+    with open(MEMORY_DIR / 'test_credentials.md', 'w', encoding='utf-8') as f:
+        f.write('# Dead Signal Debug Credentials\n\n')
+        f.write(f'## System Admin\n- Callsign: {callsign}\n- Auth Key: {raw_key}\n- Role: {role}\n')
+
+
+def validate_runtime_config():
+    if APP_ENV == 'production' and not os.environ.get('JWT_SECRET', '').strip():
+        raise RuntimeError('JWT_SECRET must be configured in production')
+    if APP_ENV == 'production' and not os.environ.get('CORS_ORIGINS', '').strip():
+        logger.warning('CORS_ORIGINS is not set in production. Cross-origin browser clients will be blocked.')
+    if COOKIE_SAMESITE == 'none' and not COOKIE_SECURE:
+        raise RuntimeError('COOKIE_SAMESITE=none requires COOKIE_SECURE=true')
 
 @app.on_event('startup')
 async def startup():
+    validate_runtime_config()
     # Drop old email-based index if exists, create callsign index
     try:
         await db.users.drop_index('email_1')
@@ -659,12 +891,13 @@ async def startup():
         _write_credentials(admin.get('callsign', '?'), '[HIDDEN - already issued]', 'system_admin')
     else:
         logger.info('No system admin found — setup required at /api/auth/setup')
-        os.makedirs('/app/memory', exist_ok=True)
-        with open('/app/memory/test_credentials.md', 'w') as f:
-            f.write('# Dead Signal Test Credentials\n\n')
-            f.write('## SETUP REQUIRED\n')
-            f.write(f'- Setup Secret: {os.environ.get("SETUP_SECRET", "")}\n')
-            f.write('- POST /api/auth/setup with {callsign, setup_secret}\n')
+        if WRITE_DEBUG_CREDENTIALS:
+            MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+            with open(MEMORY_DIR / 'test_credentials.md', 'w', encoding='utf-8') as f:
+                f.write('# Dead Signal Debug Setup\n\n')
+                f.write('## SETUP REQUIRED\n')
+                f.write(f'- Setup Secret: {os.environ.get("SETUP_SECRET", "")}\n')
+                f.write('- POST /api/auth/setup with {callsign, setup_secret}\n')
 
     asyncio.create_task(ptero_ws.run())
     logger.info('Dead Signal backend online — Pterodactyl WS consumer started')
@@ -714,7 +947,7 @@ faction_router = init_faction_routes(db, get_current_user)
 app.include_router(faction_router)
 
 # Game Master routes
-gm_router = init_gm_routes(db, get_current_user, ptero)
+gm_router = init_gm_routes(db, get_current_user, ptero, ws_manager)
 app.include_router(gm_router)
 
 # World state routes
