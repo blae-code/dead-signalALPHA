@@ -20,7 +20,7 @@ const SEVERITY_CLASSES = {
   low: 'text-[#88837a] border-l-[#88837a]',
 };
 
-export default function EventFeed({ events, onRefresh }) {
+export default function EventFeed({ events, onRefresh, serverOffline }) {
   const formatTime = (ts) => {
     if (!ts) return '--:--';
     const d = new Date(ts);
@@ -47,11 +47,19 @@ export default function EventFeed({ events, onRefresh }) {
 
       <ScrollArea className="h-[350px]">
         <div className="p-2 space-y-1">
+          {serverOffline && (
+            <div className="border border-[#8b3a3a]/30 bg-[#8b3a3a]/5 p-2 mb-2 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-[#8b3a3a]" />
+              <span className="text-[10px] font-mono text-[#a94442] uppercase tracking-widest">Server offline — no live events</span>
+            </div>
+          )}
           {events.length === 0 ? (
             <div className="text-center py-12">
               <Radio className="w-6 h-6 text-[#88837a] mx-auto mb-3 opacity-40" />
               <p className="text-xs font-mono text-[#88837a]">No events intercepted</p>
-              <p className="text-[10px] font-mono text-[#88837a]/60 mt-1">Monitoring all frequencies...</p>
+              <p className="text-[10px] font-mono text-[#88837a]/60 mt-1">
+                {serverOffline ? 'Server is offline. Start the server to receive events.' : 'Monitoring all frequencies...'}
+              </p>
             </div>
           ) : (
             events.map((ev, i) => (

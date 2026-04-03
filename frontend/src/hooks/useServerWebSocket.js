@@ -31,6 +31,8 @@ export function useServerWebSocket() {
           switch (msg.type) {
             case 'stats':
               setLiveStats(msg.data);
+              // Stats also carry the server state
+              if (msg.data?.state) setServerState(msg.data.state);
               break;
             case 'status':
               setServerState(msg.data?.state);

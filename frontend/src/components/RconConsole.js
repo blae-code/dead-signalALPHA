@@ -3,7 +3,7 @@ import api from '@/lib/api';
 import { Terminal, Send, AlertCircle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-export default function RconConsole({ isAdmin, consoleLogs = [] }) {
+export default function RconConsole({ isAdmin, consoleLogs = [], serverOffline = false }) {
   const [command, setCommand] = useState('');
   const [history, setHistory] = useState([]);
   const [sending, setSending] = useState(false);
@@ -77,6 +77,13 @@ export default function RconConsole({ isAdmin, consoleLogs = [] }) {
           <p className="text-[#88837a]">Connected to server via Pterodactyl WebSocket relay</p>
           <p className="text-[#88837a]">Type commands below. Live console output streams below.</p>
           <p className="text-[#2a2520]">{'='.repeat(60)}</p>
+
+          {serverOffline && (
+            <div className="border border-[#8b3a3a]/30 bg-[#8b3a3a]/5 p-2 my-2">
+              <p className="text-[#a94442] text-[10px] uppercase tracking-widest">Server offline — console stream unavailable</p>
+              <p className="text-[#88837a] text-[10px] mt-1">Start the server to receive live console output and send commands.</p>
+            </div>
+          )}
 
           {/* Live console output from WebSocket */}
           {showLive && consoleLogs.map((log, i) => (

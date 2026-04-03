@@ -98,27 +98,36 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* WS connection indicator */}
-          <div className="hidden md:flex items-center gap-1.5 text-[10px] font-mono">
-            {connected ? (
-              <><Wifi className="w-3 h-3 text-[#6b7a3d]" /><span className="text-[#6b7a3d]">LIVE</span></>
-            ) : (
-              <><WifiOff className="w-3 h-3 text-[#88837a]" /><span className="text-[#88837a]">OFFLINE</span></>
-            )}
-          </div>
+          {/* Combined status indicator */}
+          <div className="hidden md:flex items-center gap-3 text-[10px] font-mono">
+            {/* WebSocket connection */}
+            <div className="flex items-center gap-1.5">
+              {connected ? (
+                <><Wifi className="w-3 h-3 text-[#6b7a3d]" /><span className="text-[#6b7a3d]">CONNECTED</span></>
+              ) : (
+                <><WifiOff className="w-3 h-3 text-[#8b3a3a]" /><span className="text-[#8b3a3a]">DISCONNECTED</span></>
+              )}
+            </div>
 
-          {/* Server indicator */}
-          <div className="hidden md:flex items-center gap-2 text-xs font-mono">
-            <div className={`w-2 h-2 rounded-full ${
-              currentState === 'running'
-                ? 'bg-[#6b7a3d] pulse-green'
-                : currentState === 'offline' || currentState === 'stopped'
-                  ? 'bg-[#8b3a3a]'
+            <span className="text-[#2a2520]">|</span>
+
+            {/* Server state */}
+            <div className="flex items-center gap-1.5">
+              <div className={`w-2 h-2 rounded-full ${
+                currentState === 'running' ? 'bg-[#6b7a3d] pulse-green'
+                  : currentState === 'starting' ? 'bg-[#c4841d] pulse-amber'
+                  : currentState === 'offline' || currentState === 'stopped' ? 'bg-[#8b3a3a]'
                   : 'bg-[#88837a]'
-            }`} />
-            <span className="text-[#88837a]">
-              {currentState.toUpperCase()}
-            </span>
+              }`} />
+              <span className={
+                currentState === 'running' ? 'text-[#6b7a3d]'
+                  : currentState === 'starting' ? 'text-[#c4841d]'
+                  : currentState === 'offline' || currentState === 'stopped' ? 'text-[#8b3a3a]'
+                  : 'text-[#88837a]'
+              }>
+                SERVER {currentState.toUpperCase()}
+              </span>
+            </div>
           </div>
 
           {/* User menu */}
@@ -194,7 +203,7 @@ export default function DashboardPage() {
                 <ServerStatus data={serverData} liveStats={liveStats} liveState={currentState} onRefresh={fetchServer} isAdmin={isAdmin} />
               </div>
               <div className="lg:col-span-2">
-                <EventFeed events={allEvents} onRefresh={fetchEvents} />
+                <EventFeed events={allEvents} onRefresh={fetchEvents} serverOffline={currentState === 'offline' || currentState === 'stopped'} />
               </div>
             </div>
             <div className="mt-4">
@@ -204,7 +213,7 @@ export default function DashboardPage() {
 
           {/* Console Tab */}
           <TabsContent value="console" className="mt-0">
-            <RconConsole isAdmin={isAdmin} consoleLogs={consoleLogs} />
+            <RconConsole isAdmin={isAdmin} consoleLogs={consoleLogs} serverOffline={currentState === 'offline' || currentState === 'stopped'} />
           </TabsContent>
 
           {/* Map Tab */}

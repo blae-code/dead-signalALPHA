@@ -107,8 +107,10 @@ class PterodactylWSConsumer:
 
     async def process_stats(self, stats_json: str):
         try:
-            self.live_stats = json.loads(stats_json)
-            await self.ws_manager.broadcast({'type': 'stats', 'data': self.live_stats})
+            stats = json.loads(stats_json)
+            stats['state'] = self.server_state  # Include current state with stats
+            self.live_stats = stats
+            await self.ws_manager.broadcast({'type': 'stats', 'data': stats})
         except json.JSONDecodeError:
             pass
 
