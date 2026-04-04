@@ -153,7 +153,13 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode('utf-8'), hashed.encode('utf-8'))
+    if not plain or not hashed:
+        return False
+    try:
+        return bcrypt.checkpw(plain.encode('utf-8'), hashed.encode('utf-8'))
+    except Exception:
+        logger.warning('Encountered invalid password hash during login verification')
+        return False
 
 def create_access_token(user_id: str, email: str, role: str) -> str:
     return pyjwt.encode(
@@ -351,7 +357,8 @@ async def register(data: RegisterInput, response: Response):
 @api_router.post('/auth/login')
 async def login(data: LoginInput, request: Request, response: Response):
     email = data.email.strip().lower()
-    ident = f"{request.client.host}:{email}"
+    client_host = request.client.host if request.client else 'unknown'
+    ident = f"{client_host}:{email}"
 
     attempts = await db.login_attempts.find_one({'identifier': ident})
     if attempts and attempts.get('count', 0) >= 5:
@@ -982,12 +989,25 @@ async def startup():
     admin = await db.users.find_one({'role': 'system_admin'})
     if admin:
         logger.info(f'System admin exists: {admin.get("callsign")} ({admin.get("email")})')
+        # Backfill missing password hash for legacy admins
+        if admin_password and not admin.get('password_hash'):
+            await db.users.update_one(
+                {'_id': admin['_id']},
+                {'$set': {'password_hash': hash_password(admin_password), 'status': 'active'}},
+            )
+            logger.info(f'Backfilled missing password hash for admin: {admin.get("email")}')
         _write_credentials(admin.get('callsign', '?'), admin.get('email', '?'), 'system_admin')
     elif admin_email and admin_password:
         # Seed admin account from environment
         existing = await db.users.find_one({'email': admin_email})
         if existing:
-            await db.users.update_one({'email': admin_email}, {'$set': {'role': 'system_admin', 'status': 'active'}})
+            update_fields = {'role': 'system_admin', 'status': 'active'}
+            if not existing.get('password_hash'):
+                update_fields['password_hash'] = hash_password(admin_password)
+                logger.info(f'Backfilled missing password hash for promoted admin: {admin_email}')
+            if not existing.get('callsign'):
+                update_fields['callsign'] = admin_callsign
+            await db.users.update_one({'email': admin_email}, {'$set': update_fields})
             logger.info(f'Promoted existing user to system_admin: {admin_email}')
         else:
             doc = {

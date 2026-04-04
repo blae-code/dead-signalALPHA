@@ -223,7 +223,7 @@ export default function LoginPage({ onAuth }) {
                   <div>
                     <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">Confirm Password</label>
                     <input data-testid="reset-confirm-password" type={showPw ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Repeat password" required
+                      placeholder="Repeat password" required autoComplete="new-password"
                       className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all" />
                   </div>
                   {error && (
@@ -256,7 +256,7 @@ export default function LoginPage({ onAuth }) {
                 <div>
                   <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">Email</label>
                   <input data-testid="forgot-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                    placeholder="operator@example.com" required
+                    placeholder="operator@example.com" required autoComplete="email"
                     className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all" />
                 </div>
                 {error && (
@@ -300,7 +300,7 @@ export default function LoginPage({ onAuth }) {
                   <div className="form-field-enter" style={stagger(0)}>
                     <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">Callsign</label>
                     <input data-testid="auth-callsign" type="text" value={callsign} onChange={(e) => setCallsign(e.target.value)}
-                      placeholder="Your operator name" required
+                      placeholder="Your operator name" required autoComplete="nickname"
                       className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all" />
                     <p className="mt-1 text-[9px] font-mono text-[#88837a]/60">Your public identity in the wasteland</p>
                   </div>
@@ -308,14 +308,14 @@ export default function LoginPage({ onAuth }) {
                 <div className="form-field-enter" style={stagger(mode === 'register' ? 1 : 0)}>
                   <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">Email</label>
                   <input data-testid="auth-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                    placeholder="operator@example.com" required
+                    placeholder="operator@example.com" required autoComplete="email"
                     className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all" />
                 </div>
                 <div className="form-field-enter" style={stagger(mode === 'register' ? 2 : 1)}>
                   <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">Password</label>
                   <div className="relative">
                     <input data-testid="auth-password" type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)}
-                      placeholder={mode === 'register' ? 'Min 6 characters' : 'Enter password'} required
+                      placeholder={mode === 'register' ? 'Min 6 characters' : 'Enter password'} required autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                       className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all pr-10" />
                     <button type="button" onClick={() => setShowPw(!showPw)}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#88837a] hover:text-[#c4841d] transition-colors" data-testid="auth-toggle-password">

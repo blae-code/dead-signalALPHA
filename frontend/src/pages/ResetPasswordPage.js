@@ -75,6 +75,7 @@ export default function ResetPasswordPage({ token, onBack }) {
                   placeholder="Min 6 characters"
                   className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all pr-10"
                   required
+                  autoComplete="new-password"
                 />
                 <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#88837a] hover:text-[#c4841d] transition-colors">
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -91,6 +92,7 @@ export default function ResetPasswordPage({ token, onBack }) {
                 placeholder="Repeat password"
                 className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all"
                 required
+                autoComplete="new-password"
               />
             </div>
             {error && (
