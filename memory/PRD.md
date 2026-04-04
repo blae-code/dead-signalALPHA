@@ -6,8 +6,8 @@ Dead Signal is an AI-narrated companion app for the HumanitZ survival sandbox ga
 ## Core Stack
 - **Frontend**: React + Tailwind CSS + Shadcn/UI (dark tactical theme)
 - **Backend**: FastAPI + MongoDB
-- **Real-time**: WebSocket pipeline (Pterodactyl → Backend → Frontend)
-- **AI**: Gemini 2.5 Flash via emergentintegrations (narrative generation + diplomatic intelligence)
+- **Real-time**: WebSocket pipeline (Pterodactyl -> Backend -> Frontend)
+- **AI**: Gemini 2.5 Flash via emergentintegrations (narrative generation + diplomatic intelligence + OCR vision)
 - **Auth**: Email/Password with JWT (HTTP-only cookies), Callsign display names
 - **Server Integration**: Pterodactyl API (RCON, file browser, backups, live stats)
 
@@ -47,17 +47,29 @@ Dead Signal is an AI-narrated companion app for the HumanitZ survival sandbox ga
 - [x] Scheduled Tasks, Event Triggers, Quick RCON Commands
 - [x] GM Broadcast system, Player Admin, GM Action Log
 
-### Phase 3: Intelligence & Territory (Complete — Current Session)
-- [x] **Player Count Extraction**: WebSocket broadcasts online_players + online_count from connect/disconnect log parsing. ServerStatus shows Active Roster with pulsing indicators.
-- [x] **Diplomat AI Agent**: Gemini 2.5 Flash powered diplomatic intelligence:
-  - Reputation Matrix: Auto-computed from treaties, combat events, trade history
-  - AI Strategic Assessment: On-demand analysis of faction power dynamics
-  - Treaty Advisor: AI recommendations for alliances/trade/war between faction pairs
-- [x] **Interactive Territory Map**: 16×16 grid with faction-colored territory overlays:
-  - Zone types: territory, base, outpost, contested
-  - GM click-to-assign panel with faction/zone-type selectors
-  - Territory summary with faction control percentages
-  - Map markers for danger zones, airdrops, bases
+### Phase 3: Intelligence & Territory (Complete)
+- [x] Player Count Extraction (WebSocket broadcasts online_players + online_count)
+- [x] Diplomat AI Agent (Gemini 2.5 Flash powered diplomatic intelligence)
+- [x] Interactive Territory Map (16x16 grid with faction-colored territory overlays)
+- [x] Steam Identity Linking (manual link of app account to in-game character)
+
+### Phase 4: Survival Planning Suite (Complete — Current Session)
+- [x] **Base Planner**: Visual 8x8 grid canvas for placing base modules (11 module types: Storage Room, Armory, Med Bay, Crafting Station, Watch Tower, Generator Room, Kitchen, Barricade Wall, Reinforced Wall, Concrete Bunker, Sleeping Quarters)
+  - Save/load blueprints to MongoDB
+  - Auto-aggregates total crafting recipes and raw materials needed
+  - Cross-references against player inventory to show have/need/shortfall
+- [x] **Loot Intelligence System**: 25-item database mapping resources to 21 scavenging locations
+  - Probability tiers (high/medium/low) per item-location pair
+  - Danger ratings per location (low/medium/high/very_high)
+  - Location Guide with detailed descriptions
+  - Search/filter across all items
+  - Shortfall Intel API: given missing items, returns where to find them
+- [x] **Enhanced OCR**: Alias resolution system for common OCR misspellings
+  - 70+ alias mappings for HumanitZ items
+  - Structured review table with editable names/quantities
+  - Confidence indicators (exact/alias/partial/unknown)
+  - Autocomplete from known items list
+- [x] **Operations Dashboard Tab**: New tab in main navigation housing Base Planner + Loot Intel
 
 ### Visual Polish (Complete)
 - [x] Immersive login page with radar background animation + typewriter tagline
@@ -67,7 +79,7 @@ Dead Signal is an AI-narrated companion app for the HumanitZ survival sandbox ga
 
 ## Upcoming Tasks (P2-P3)
 
-### Phase 4: Immersion & Integrations
+### Phase 5: Immersion & Integrations
 - [ ] LiveKit voice channels for factions
 - [ ] TTS Narration (OpenAI/ElevenLabs)
 - [ ] Discord webhook broadcaster for AI narratives
@@ -86,6 +98,10 @@ Dead Signal is an AI-narrated companion app for the HumanitZ survival sandbox ga
 - Territories: GET /api/territories, /summary, /markers; POST /claim; DELETE /claim
 - Notifications: POST /api/notifications/subscribe, DELETE /subscribe, GET|PATCH /preferences
 - Server: GET /api/server/status, /live-stats, /backups, /files, /api/players
+- Inventory: GET/PUT/PATCH /api/inventory/items, /caches, /bases, /crafting-queue
+- OCR: POST /api/ocr/scan
+- Loot Intel: GET /api/loot-intel/items, /locations, /items/{name}; POST /resolve-aliases, /shortfall-intel
+- Planner: GET /api/planner/modules, /blueprints; POST/PUT/DELETE /api/planner/blueprints/{id}; POST /blueprints/{id}/calculate
 - WS: /api/ws/feed
 
 ## Database Collections
@@ -94,6 +110,8 @@ Dead Signal is an AI-narrated companion app for the HumanitZ survival sandbox ga
 - gm_tasks, gm_triggers, gm_log, gm_broadcasts, gm_quick_commands
 - story_arcs, world_event_templates, missions, npcs, intel_reports
 - territories, diplomacy
+- player_inventory, caches, bases, crafting_queues
+- blueprints, loot_markers
 
 ## CORS Configuration
 - Production: https://dead-signal.ca, https://faction-wars-17.preview.emergentagent.com
