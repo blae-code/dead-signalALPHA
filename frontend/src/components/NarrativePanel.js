@@ -185,7 +185,7 @@ export default function NarrativePanel({ events, liveNarrations = [], isAdmin })
               <p className="text-xs font-mono text-[#88837a]/60 italic">No dispatches in archive. Generate one above.</p>
             ) : (
               dispatches.map((d, i) => (
-                <div key={i} className="p-2 border-l-2 border-[#2a2520] hover:border-[#c4841d] bg-[#111111]/50 transition-colors group">
+                <div key={i} className="narration-enter p-2 border-l-2 border-[#2a2520] hover:border-[#c4841d] bg-[#111111]/50 transition-colors group" style={{ animationDelay: `${Math.min(i * 0.08, 0.6)}s` }}>
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-mono text-[#88837a]">

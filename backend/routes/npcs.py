@@ -344,6 +344,177 @@ async def delete_npc(npc_id: str, request: Request):
     return {'message': 'NPC deleted'}
 
 
+# ==================== NPC DIRECTOR ====================
+#
+# The NPC Director is an AI-assisted tool that gives the GM a live view of
+# "active" NPCs and lets them send narrative commands or link NPCs to missions.
+#
+# Collections:
+#   npcs          — existing NPC docs
+#   npc_events    — existing event log
+#   missions      — { mission_id, title, status, assigned_npc_id?, ... }
+#
+# WebSocket broadcast on director commands:
+#   { type: "npc_director_event", data: { npc_id, npc_name, command, timestamp } }
+
+class DirectorCommandInput(BaseModel):
+    """Freeform GM directive for an NPC — broadcast in-world and logged."""
+    command: str           # e.g. "Move to Grid C7 and engage hostiles"
+    rcon_say: bool = True  # Whether to also send an RCON say announcement
+
+class MissionLinkInput(BaseModel):
+    mission_id: str
+
+
+@router.get('/director/active')
+async def list_director_active(request: Request):
+    """
+    Return all active NPCs sorted by last event time, for the NPC Director panel.
+    Includes the most recent npc_event for each NPC as `last_event`.
+    """
+    await require_admin(request)
+
+    npcs = await db.npcs.find({'status': 'active'}, {'_id': 0}).sort('updated_at', -1).to_list(100)
+
+    result = []
+    for npc in npcs:
+        nid = npc.get('npc_id')
+        last_evt = await db.npc_events.find_one(
+            {'npc_id': nid}, {'_id': 0},
+            sort=[('timestamp', -1)],
+        )
+        # Fetch linked mission title if any
+        mission_title = None
+        if npc.get('linked_mission_id'):
+            m = await db.missions.find_one(
+                {'mission_id': npc['linked_mission_id']}, {'_id': 0, 'title': 1}
+            )
+            mission_title = (m or {}).get('title')
+
+        result.append({
+            **npc,
+            'last_event':    last_evt,
+            'mission_title': mission_title,
+        })
+
+    return result
+
+
+@router.get('/{npc_id}/director')
+async def get_npc_director(npc_id: str, request: Request):
+    """Full director view for a single NPC: profile + last 20 events + linked mission."""
+    await require_admin(request)
+
+    npc = await db.npcs.find_one({'npc_id': npc_id}, {'_id': 0})
+    if not npc:
+        raise HTTPException(status_code=404, detail='NPC not found')
+
+    events = await db.npc_events.find(
+        {'npc_id': npc_id}, {'_id': 0}
+    ).sort('timestamp', -1).to_list(20)
+
+    mission = None
+    if npc.get('linked_mission_id'):
+        mission = await db.missions.find_one(
+            {'mission_id': npc['linked_mission_id']}, {'_id': 0}
+        )
+
+    return {'npc': npc, 'events': events, 'linked_mission': mission}
+
+
+@router.post('/{npc_id}/director/command')
+async def director_command(npc_id: str, data: DirectorCommandInput, request: Request):
+    """
+    Issue a narrative command to an NPC.
+    Logs the command in npc_events. If rcon_say is True, announces it in-game.
+
+    TODO: Optionally wire to the AI narrator to auto-generate in-character
+    dialogue for the NPC based on the command text.
+    """
+    user = await require_admin(request)
+
+    command_text = (data.command or '').strip()[:300]
+    if not command_text:
+        raise HTTPException(status_code=400, detail='command is required')
+
+    npc = await db.npcs.find_one({'npc_id': npc_id}, {'_id': 0, 'name': 1, 'status': 1})
+    if not npc:
+        raise HTTPException(status_code=404, detail='NPC not found')
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    await db.npc_events.insert_one({
+        'npc_id':      npc_id,
+        'npc_name':    npc['name'],
+        'event_type':  'director_command',
+        'notes':       command_text,
+        'recorded_by': user.get('callsign', 'unknown'),
+        'timestamp':   now,
+    })
+
+    if data.rcon_say and ptero:
+        safe_cmd = command_text.replace('\n', ' ')[:200]
+        try:
+            await ptero.send_command(f'say [NPC:{npc["name"]}] {safe_cmd}')
+        except Exception as e:
+            logger.error('Director RCON say failed: %s', e)
+
+    if ws_manager:
+        await ws_manager.broadcast({
+            'type': 'npc_director_event',
+            'data': {
+                'npc_id':   npc_id,
+                'npc_name': npc['name'],
+                'command':  command_text,
+                'issued_by': user.get('callsign'),
+                'timestamp': now,
+            },
+        })
+
+    await log_npc_action(user.get('callsign', '?'), 'director_command', {
+        'npc_id': npc_id, 'name': npc['name'], 'command': command_text,
+    })
+    return {'message': 'Command issued', 'npc': npc['name'], 'command': command_text}
+
+
+@router.post('/{npc_id}/director/link-mission')
+async def link_mission(npc_id: str, data: MissionLinkInput, request: Request):
+    """
+    Associate an NPC with a mission. Updates npcs.linked_mission_id.
+    Pass mission_id="" to unlink.
+    """
+    await require_admin(request)
+
+    npc = await db.npcs.find_one({'npc_id': npc_id}, {'_id': 0, 'name': 1})
+    if not npc:
+        raise HTTPException(status_code=404, detail='NPC not found')
+
+    mission_id = (data.mission_id or '').strip()
+
+    if mission_id:
+        mission = await db.missions.find_one({'mission_id': mission_id}, {'_id': 0, 'title': 1})
+        if not mission:
+            raise HTTPException(status_code=404, detail='Mission not found')
+    else:
+        mission = None
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.npcs.update_one(
+        {'npc_id': npc_id},
+        {'$set': {'linked_mission_id': mission_id or None, 'updated_at': now}},
+    )
+
+    await log_npc_action(
+        'gm', 'link_mission',
+        {'npc_id': npc_id, 'name': npc['name'], 'mission_id': mission_id},
+    )
+    return {
+        'message': 'Mission linked' if mission_id else 'Mission unlinked',
+        'npc': npc['name'],
+        'mission': (mission or {}).get('title'),
+    }
+
+
 def init_npc_routes(database, auth_func, ptero_client, ws_broadcast_manager=None):
     global db, get_current_user, ptero, ws_manager
     db = database

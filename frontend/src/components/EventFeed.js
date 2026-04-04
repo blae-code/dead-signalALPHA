@@ -64,9 +64,10 @@ export default function EventFeed({ events, onRefresh, serverOffline }) {
           ) : (
             events.map((ev, i) => (
               <div
-                key={i}
+                key={ev.event_id || `${ev.timestamp}-${i}`}
                 data-testid={`event-item-${i}`}
-                className={`flex items-start gap-2 p-2 border-l-2 ${SEVERITY_CLASSES[ev.severity] || SEVERITY_CLASSES.low} bg-[#111111]/50 hover:bg-[#111111] transition-colors text-xs font-mono`}
+                className={`event-enter flex items-start gap-2 p-2 border-l-2 ${SEVERITY_CLASSES[ev.severity] || SEVERITY_CLASSES.low} bg-[#111111]/50 hover:bg-[#111111] transition-colors text-xs font-mono`}
+                style={{ animationDelay: `${Math.min(i * 0.04, 0.4)}s` }}
               >
                 <span className="opacity-60 mt-0.5">
                   {EVENT_ICONS[ev.type] || <Radio className="w-3 h-3" />}

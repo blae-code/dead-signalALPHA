@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { Radio, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { Radio, AlertTriangle, Eye, EyeOff, ArrowLeft, Check } from 'lucide-react';
 import api from '@/lib/api';
 
 export default function LoginPage({ onAuth }) {
-  const [mode, setMode] = useState('login');
+  const [mode, setMode] = useState('login'); // login | register | forgot
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [callsign, setCallsign] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [resetToken, setResetToken] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,6 +51,21 @@ export default function LoginPage({ onAuth }) {
     }
   };
 
+  const handleForgot = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const { data } = await api.post('/auth/forgot-password', { email: email.trim() });
+      setForgotSent(true);
+      if (data.reset_token) setResetToken(data.reset_token);
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Request failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 noise-bg">
       {/* Scanline overlay */}
@@ -75,121 +92,208 @@ export default function LoginPage({ onAuth }) {
       {/* Auth Card */}
       <div className="w-full max-w-md" data-testid="auth-card">
         <div className="border border-[#2a2520] bg-[#111111]/95 panel-inset">
-          {/* Mode tabs */}
-          <div className="flex border-b border-[#2a2520]">
-            <button
-              data-testid="auth-tab-login"
-              onClick={() => { setMode('login'); setError(''); }}
-              className={`flex-1 py-3 text-xs font-heading uppercase tracking-[0.3em] transition-all ${
-                mode === 'login'
-                  ? 'text-[#c4841d] bg-[#c4841d]/5 border-b-2 border-[#c4841d]'
-                  : 'text-[#88837a] hover:text-[#d4cfc4]'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              data-testid="auth-tab-register"
-              onClick={() => { setMode('register'); setError(''); }}
-              className={`flex-1 py-3 text-xs font-heading uppercase tracking-[0.3em] transition-all ${
-                mode === 'register'
-                  ? 'text-[#c4841d] bg-[#c4841d]/5 border-b-2 border-[#c4841d]'
-                  : 'text-[#88837a] hover:text-[#d4cfc4]'
-              }`}
-            >
-              Register
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            {/* Callsign (register only) */}
-            {mode === 'register' && (
-              <div>
-                <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">
-                  Callsign
-                </label>
-                <input
-                  data-testid="auth-callsign"
-                  type="text"
-                  value={callsign}
-                  onChange={(e) => setCallsign(e.target.value)}
-                  placeholder="Your operator name"
-                  className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all"
-                  required
-                />
-                <p className="mt-1 text-[9px] font-mono text-[#88837a]/60">
-                  Your public identity in the wasteland
-                </p>
-              </div>
-            )}
-
-            {/* Email */}
+          {mode === 'forgot' ? (
+            /* Forgot Password Flow */
             <div>
-              <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">
-                Email
-              </label>
-              <input
-                data-testid="auth-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="operator@example.com"
-                className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all"
-                required
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  data-testid="auth-password"
-                  type={showPw ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={mode === 'register' ? 'Min 6 characters' : 'Enter password'}
-                  className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all pr-10"
-                  required
-                />
+              <div className="border-b border-[#2a2520] p-3 flex items-center gap-2">
                 <button
-                  type="button"
-                  onClick={() => setShowPw(!showPw)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#88837a] hover:text-[#c4841d] transition-colors"
-                  data-testid="auth-toggle-password"
+                  onClick={() => { setMode('login'); setForgotSent(false); setResetToken(''); setError(''); }}
+                  className="text-[#88837a] hover:text-[#c4841d] transition-colors"
+                  data-testid="forgot-back"
                 >
-                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <span className="text-xs font-heading uppercase tracking-[0.3em] text-[#c4841d]">Reset Password</span>
+              </div>
+              {forgotSent ? (
+                <div className="p-6 text-center">
+                  <Check className="w-8 h-8 text-[#6b7a3d] mx-auto mb-3" />
+                  <p className="text-xs font-mono text-[#d4cfc4] mb-4">Reset token generated.</p>
+                  {resetToken && (
+                    <div className="mb-4">
+                      <p className="text-[10px] font-mono text-[#88837a] mb-2 uppercase tracking-widest">Your reset token:</p>
+                      <div className="bg-[#0a0a0a] border border-[#2a2520] p-3">
+                        <code className="text-xs font-mono text-[#c4841d] break-all" data-testid="reset-token-display">{resetToken}</code>
+                      </div>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(`${window.location.origin}/reset?token=${resetToken}`)}
+                        className="mt-2 text-[10px] font-mono text-[#88837a] hover:text-[#c4841d] transition-colors uppercase tracking-widest"
+                        data-testid="copy-reset-link"
+                      >
+                        Copy reset link
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => { setMode('login'); setForgotSent(false); setResetToken(''); }}
+                    className="px-4 py-2 border border-[#c4841d] text-[#c4841d] font-heading text-xs uppercase tracking-widest hover:bg-[#c4841d]/10 transition-all"
+                    data-testid="forgot-back-to-login"
+                  >
+                    Back to Sign In
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgot} className="p-6 space-y-4">
+                  <p className="text-xs font-mono text-[#88837a] mb-2">Enter your email to receive a password reset token.</p>
+                  <div>
+                    <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">Email</label>
+                    <input
+                      data-testid="forgot-email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="operator@example.com"
+                      className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all"
+                      required
+                    />
+                  </div>
+                  {error && (
+                    <div className="flex items-center gap-2 p-2.5 border border-[#8b3a3a]/60 bg-[#8b3a3a]/10" data-testid="auth-error">
+                      <AlertTriangle className="w-4 h-4 text-[#8b3a3a] shrink-0" />
+                      <span className="text-xs font-mono text-[#d4cfc4]">{error}</span>
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    data-testid="forgot-submit"
+                    className="w-full py-3 bg-[#c4841d] hover:bg-[#e8b84d] text-[#0a0a0a] font-heading text-sm uppercase tracking-[0.3em] transition-all disabled:opacity-50"
+                  >
+                    {loading ? 'Sending...' : 'Generate Reset Token'}
+                  </button>
+                </form>
+              )}
+            </div>
+          ) : (
+            /* Login / Register Flow */
+            <>
+              {/* Mode tabs */}
+              <div className="flex border-b border-[#2a2520]">
+                <button
+                  data-testid="auth-tab-login"
+                  onClick={() => { setMode('login'); setError(''); }}
+                  className={`flex-1 py-3 text-xs font-heading uppercase tracking-[0.3em] transition-all ${
+                    mode === 'login'
+                      ? 'text-[#c4841d] bg-[#c4841d]/5 border-b-2 border-[#c4841d]'
+                      : 'text-[#88837a] hover:text-[#d4cfc4]'
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  data-testid="auth-tab-register"
+                  onClick={() => { setMode('register'); setError(''); }}
+                  className={`flex-1 py-3 text-xs font-heading uppercase tracking-[0.3em] transition-all ${
+                    mode === 'register'
+                      ? 'text-[#c4841d] bg-[#c4841d]/5 border-b-2 border-[#c4841d]'
+                      : 'text-[#88837a] hover:text-[#d4cfc4]'
+                  }`}
+                >
+                  Register
                 </button>
               </div>
-            </div>
 
-            {/* Error */}
-            {error && (
-              <div className="flex items-center gap-2 p-2.5 border border-[#8b3a3a]/60 bg-[#8b3a3a]/10" data-testid="auth-error">
-                <AlertTriangle className="w-4 h-4 text-[#8b3a3a] shrink-0" />
-                <span className="text-xs font-mono text-[#d4cfc4]">{error}</span>
-              </div>
-            )}
+              <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                {/* Callsign (register only) */}
+                {mode === 'register' && (
+                  <div>
+                    <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">
+                      Callsign
+                    </label>
+                    <input
+                      data-testid="auth-callsign"
+                      type="text"
+                      value={callsign}
+                      onChange={(e) => setCallsign(e.target.value)}
+                      placeholder="Your operator name"
+                      className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all"
+                      required
+                    />
+                    <p className="mt-1 text-[9px] font-mono text-[#88837a]/60">
+                      Your public identity in the wasteland
+                    </p>
+                  </div>
+                )}
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              data-testid="auth-submit"
-              className="w-full py-3 bg-[#c4841d] hover:bg-[#e8b84d] text-[#0a0a0a] font-heading text-sm uppercase tracking-[0.3em] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-[#0a0a0a] border-t-transparent rounded-full animate-spin" />
-                  {mode === 'register' ? 'Registering...' : 'Authenticating...'}
-                </span>
-              ) : (
-                mode === 'register' ? 'Create Account' : 'Sign In'
-              )}
-            </button>
-          </form>
+                {/* Email */}
+                <div>
+                  <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">Email</label>
+                  <input
+                    data-testid="auth-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="operator@example.com"
+                    className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all"
+                    required
+                  />
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">Password</label>
+                  <div className="relative">
+                    <input
+                      data-testid="auth-password"
+                      type={showPw ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={mode === 'register' ? 'Min 6 characters' : 'Enter password'}
+                      className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all pr-10"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPw(!showPw)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#88837a] hover:text-[#c4841d] transition-colors"
+                      data-testid="auth-toggle-password"
+                    >
+                      {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Forgot password link (login only) */}
+                {mode === 'login' && (
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={() => { setMode('forgot'); setError(''); }}
+                      className="text-[10px] font-mono text-[#88837a] hover:text-[#c4841d] transition-colors uppercase tracking-widest"
+                      data-testid="forgot-password-link"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+
+                {/* Error */}
+                {error && (
+                  <div className="flex items-center gap-2 p-2.5 border border-[#8b3a3a]/60 bg-[#8b3a3a]/10" data-testid="auth-error">
+                    <AlertTriangle className="w-4 h-4 text-[#8b3a3a] shrink-0" />
+                    <span className="text-xs font-mono text-[#d4cfc4]">{error}</span>
+                  </div>
+                )}
+
+                {/* Submit */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  data-testid="auth-submit"
+                  className="w-full py-3 bg-[#c4841d] hover:bg-[#e8b84d] text-[#0a0a0a] font-heading text-sm uppercase tracking-[0.3em] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="w-4 h-4 border-2 border-[#0a0a0a] border-t-transparent rounded-full animate-spin" />
+                      {mode === 'register' ? 'Registering...' : 'Authenticating...'}
+                    </span>
+                  ) : (
+                    mode === 'register' ? 'Create Account' : 'Sign In'
+                  )}
+                </button>
+              </form>
+            </>
+          )}
         </div>
 
         {/* Footer */}

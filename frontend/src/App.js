@@ -1,7 +1,8 @@
 import { createContext, useState, useEffect, useContext, useCallback } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import api from '@/lib/api';
 import LoginPage from '@/pages/LoginPage';
+import ResetPasswordPage from '@/pages/ResetPasswordPage';
 import DashboardPage from '@/pages/DashboardPage';
 import OnboardingFlow from '@/components/OnboardingFlow';
 
@@ -47,6 +48,18 @@ function AuthProvider({ children }) {
   );
 }
 
+function ResetRoute() {
+  const [params] = useSearchParams();
+  const token = params.get('token');
+  const { login } = useAuth();
+
+  if (!token) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <ResetPasswordPage token={token} onBack={() => window.location.href = '/'} />;
+}
+
 function AppRoutes() {
   const { user, loading, login, logout, completeOnboarding } = useAuth();
 
@@ -61,18 +74,24 @@ function AppRoutes() {
     );
   }
 
-  if (!user) {
-    return <LoginPage onAuth={login} />;
-  }
-
-  if (!user.onboarded) {
-    return <OnboardingFlow user={user} onComplete={completeOnboarding} />;
-  }
-
   return (
     <Routes>
-      <Route path="/" element={<DashboardPage user={user} onLogout={logout} />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/reset" element={<ResetRoute />} />
+      <Route
+        path="*"
+        element={
+          !user ? (
+            <LoginPage onAuth={login} />
+          ) : !user.onboarded ? (
+            <OnboardingFlow user={user} onComplete={completeOnboarding} />
+          ) : (
+            <Routes>
+              <Route path="/" element={<DashboardPage user={user} onLogout={logout} />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          )
+        }
+      />
     </Routes>
   );
 }

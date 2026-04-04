@@ -494,6 +494,77 @@ async def gm_stats(request: Request):
     }
 
 
+# ==================== FACTION BALANCE OVERVIEW ====================
+#
+# Gives the GM a side-by-side snapshot of every faction's strength.
+# Collections used:
+#   factions        — { faction_id, name, tag, territory_count, resources? }
+#   faction_members — { faction_id, status: "active" }
+#   faction_wars    — { attacker_id, defender_id, status: "active"|"ceasefire"|"ended" }
+#   missions        — { assigned_faction, status: "active"|"completed"|"failed" }
+#
+# TODO: Once a territory system is wired up, replace territory_count
+#       with a count of territory_claims where holder_faction_id matches.
+
+@router.get('/factions/overview')
+async def faction_balance_overview(request: Request):
+    """
+    Return comparative stats for all factions.
+    Used by the GM Faction Balance panel to spot imbalances quickly.
+
+    Each entry:
+      { faction_id, name, tag, member_count, active_wars, missions_active,
+        missions_completed, territory_count, resources, created_at }
+    """
+    await require_admin(request)
+
+    factions = await db.factions.find({}, {'_id': 0}).sort('name', 1).to_list(50)
+    if not factions:
+        return []
+
+    result = []
+    for f in factions:
+        fid = f.get('faction_id') or f.get('_id', '')
+
+        members = await db.faction_members.count_documents({
+            'faction_id': fid, 'status': 'active'
+        })
+        # Active wars: faction is either attacker or defender
+        active_wars = await db.faction_wars.count_documents({
+            '$or': [{'attacker_id': fid}, {'defender_id': fid}],
+            'status': 'active',
+        })
+        missions_active = await db.missions.count_documents({
+            'assigned_faction': fid, 'status': 'active'
+        })
+        missions_done = await db.missions.count_documents({
+            'assigned_faction': fid, 'status': 'completed'
+        })
+        # Territory: count claims if territory collection exists, else use field
+        try:
+            territory = await db.territory_claims.count_documents({'holder_faction_id': fid})
+        except Exception:
+            territory = f.get('territory_count', 0)
+
+        result.append({
+            'faction_id':          fid,
+            'name':                f.get('name', ''),
+            'tag':                 f.get('tag', ''),
+            'member_count':        members,
+            'active_wars':         active_wars,
+            'missions_active':     missions_active,
+            'missions_completed':  missions_done,
+            'territory_count':     territory,
+            'resources':           f.get('resources', {}),
+            'reputation':          f.get('reputation', 0),
+            'created_at':          f.get('created_at'),
+        })
+
+    # Sort by member count descending so the strongest faction is first
+    result.sort(key=lambda r: r['member_count'], reverse=True)
+    return result
+
+
 def init_gm_routes(database, auth_func, ptero_client, ws_broadcast_manager=None):
     global db, get_current_user, ptero, ws_manager
     db = database

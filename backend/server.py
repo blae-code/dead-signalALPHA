@@ -374,6 +374,50 @@ async def complete_onboarding(request: Request):
     await db.users.update_one({'_id': ObjectId(user['_id'])}, {'$set': {'onboarded': True}})
     return {'message': 'Onboarding complete'}
 
+@api_router.post('/auth/forgot-password')
+async def forgot_password(request: Request):
+    body = await request.json()
+    email = body.get('email', '').strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail='Email required')
+    user = await db.users.find_one({'email': email})
+    # Always return success to prevent email enumeration
+    if not user:
+        return {'message': 'If that email exists, a reset token has been generated.'}
+    token = secrets.token_urlsafe(32)
+    await db.password_resets.delete_many({'email': email})
+    await db.password_resets.insert_one({
+        'email': email,
+        'token': token,
+        'expires_at': (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+        'created_at': datetime.now(timezone.utc).isoformat(),
+    })
+    logger.info(f'Password reset token generated for {email}: {token[:8]}...')
+    return {'message': 'If that email exists, a reset token has been generated.', 'reset_token': token}
+
+@api_router.post('/auth/reset-password')
+async def reset_password(request: Request):
+    body = await request.json()
+    token = body.get('token', '').strip()
+    new_password = body.get('password', '')
+    if not token:
+        raise HTTPException(status_code=400, detail='Reset token required')
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail='Password must be at least 6 characters')
+    record = await db.password_resets.find_one({'token': token})
+    if not record:
+        raise HTTPException(status_code=400, detail='Invalid or expired reset token')
+    if record.get('expires_at', '') < datetime.now(timezone.utc).isoformat():
+        await db.password_resets.delete_one({'token': token})
+        raise HTTPException(status_code=400, detail='Reset token has expired')
+    await db.users.update_one(
+        {'email': record['email']},
+        {'$set': {'password_hash': hash_password(new_password)}},
+    )
+    await db.password_resets.delete_many({'email': record['email']})
+    logger.info(f'Password reset for {record["email"]}')
+    return {'message': 'Password updated successfully. You can now sign in.'}
+
 @api_router.post('/auth/refresh')
 async def refresh(request: Request, response: Response):
     token = request.cookies.get('refresh_token')
@@ -452,6 +496,26 @@ async def delete_user(user_id: str, request: Request):
         raise HTTPException(status_code=400, detail='Cannot delete your own account')
     await db.users.delete_one({'_id': parse_object_id(user_id)})
     return {'message': 'User deleted'}
+
+@api_router.post('/admin/users/{user_id}/reset-link')
+async def admin_reset_link(user_id: str, request: Request):
+    user = await get_current_user(request)
+    if user.get('role') != 'system_admin':
+        raise HTTPException(status_code=403, detail='System admin access required')
+    target = await db.users.find_one({'_id': parse_object_id(user_id)})
+    if not target:
+        raise HTTPException(status_code=404, detail='User not found')
+    token = secrets.token_urlsafe(32)
+    await db.password_resets.delete_many({'email': target['email']})
+    await db.password_resets.insert_one({
+        'email': target['email'],
+        'token': token,
+        'expires_at': (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
+        'created_at': datetime.now(timezone.utc).isoformat(),
+    })
+    frontend_url = os.environ.get('FRONTEND_URL', '').rstrip('/')
+    reset_url = f'{frontend_url}/reset?token={token}' if frontend_url else token
+    return {'callsign': target['callsign'], 'reset_url': reset_url, 'token': token, 'expires': '24 hours'}
 
 # ==================== SERVER ROUTES ====================
 
@@ -879,6 +943,8 @@ async def startup():
     await db.users.create_index('email', unique=True)
     await db.users.create_index('callsign', unique=True)
     await db.login_attempts.create_index('identifier')
+    await db.password_resets.create_index('token', unique=True)
+    await db.password_resets.create_index('expires_at')
     await db.events.create_index([('timestamp', -1)])
     await db.events.create_index('type')
     await db.events.create_index('event_id')
