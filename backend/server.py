@@ -35,6 +35,7 @@ from routes.story_arcs import init_story_arc_routes
 from routes.notifications import init_notification_routes
 from routes.diplomat import init_diplomat_routes
 from routes.territories import init_territory_routes
+from routes.profile import init_profile_routes
 from diplomat_ai import DiplomatAI
 from scheduler import Scheduler
 
@@ -912,10 +913,36 @@ async def ws_feed(websocket: WebSocket):
 @api_router.get('/players')
 async def get_players(request: Request):
     await get_current_user(request)
+
+    # Build linked users lookup (steam_name -> callsign, steam_id -> callsign)
+    linked = await db.users.find(
+        {'$or': [{'steam_name': {'$exists': True, '$ne': ''}}, {'steam_id': {'$exists': True, '$ne': ''}}]},
+        {'_id': 0, 'callsign': 1, 'steam_name': 1, 'steam_id': 1, 'role': 1},
+    ).to_list(200)
+    by_steam_name = {u['steam_name']: u for u in linked if u.get('steam_name')}
+    by_steam_id = {u['steam_id']: u for u in linked if u.get('steam_id')}
+
     players = []
     for name, joined in ptero_ws.online_players.items():
-        players.append({'name': name, 'joined_at': joined})
-    # Also get recent sessions from DB
+        identity = ptero_ws.online_identities.get(name, {'steam_name': name})
+        # Try to resolve to an app user
+        app_user = None
+        if identity.get('steam_id'):
+            app_user = by_steam_id.get(identity['steam_id'])
+        if not app_user and identity.get('steam_name'):
+            app_user = by_steam_name.get(identity['steam_name'])
+
+        players.append({
+            'name': name,
+            'joined_at': joined,
+            'steam_name': identity.get('steam_name', ''),
+            'steam_id': identity.get('steam_id', ''),
+            'level': identity.get('level'),
+            'clan': identity.get('clan', ''),
+            'app_callsign': app_user['callsign'] if app_user else None,
+            'app_role': app_user['role'] if app_user else None,
+        })
+
     recent = await db.player_sessions.find(
         {}, {'_id': 0}
     ).sort('last_seen', -1).limit(50).to_list(50)
@@ -1141,3 +1168,8 @@ app.include_router(diplomat_router)
 # Territory map routes
 territory_router = init_territory_routes(db, get_current_user, require_server_admin)
 app.include_router(territory_router)
+
+
+# Profile & Steam linking routes
+profile_router = init_profile_routes(db, get_current_user, require_server_admin)
+app.include_router(profile_router)

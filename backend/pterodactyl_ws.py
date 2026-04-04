@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import httpx
 import websockets
 
-from event_parser import normalize_event, parse_log_line
+from event_parser import normalize_event, parse_log_line, parse_player_identity
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,7 @@ class PterodactylWSConsumer:
         self.live_stats = {}
         self.server_state = 'unknown'
         self.online_players = {}  # name -> join_time
+        self.online_identities = {}  # name -> parsed identity dict
         self.console_buffer = []
         self.max_buffer = 300
         self._last_world_state = {}
@@ -109,14 +110,32 @@ class PterodactylWSConsumer:
         if parsed_event['type'] == 'player_connect':
             for player in parsed_event.get('players', []):
                 self.online_players[player] = now
+                # Parse and cache identity
+                identity = parse_player_identity(player)
+                self.online_identities[player] = identity
+                # Auto-link: if we find a user with matching steam_id, update their record
+                if identity.get('steam_id'):
+                    await self.db.users.update_one(
+                        {'steam_id': identity['steam_id']},
+                        {'$set': {
+                            'last_game_seen': now,
+                            'game_level': identity.get('level'),
+                            'game_clan': identity.get('clan'),
+                        }},
+                    )
                 await self.db.player_sessions.update_one(
                     {'name': player, 'active': True},
-                    {'$set': {'name': player, 'joined_at': now, 'active': True, 'last_seen': now}},
+                    {'$set': {
+                        'name': player, 'joined_at': now, 'active': True, 'last_seen': now,
+                        'steam_name': identity.get('steam_name', ''),
+                        'steam_id': identity.get('steam_id', ''),
+                    }},
                     upsert=True,
                 )
         elif parsed_event['type'] == 'player_disconnect':
             for player in parsed_event.get('players', []):
                 self.online_players.pop(player, None)
+                self.online_identities.pop(player, None)
                 await self.db.player_sessions.update_one(
                     {'name': player, 'active': True},
                     {'$set': {'active': False, 'left_at': now}},
@@ -278,6 +297,11 @@ class PterodactylWSConsumer:
             stats['state'] = self.server_state
             stats['online_players'] = list(self.online_players.keys())
             stats['online_count'] = len(self.online_players)
+            # Include parsed identities for UI resolution
+            stats['online_identities'] = {
+                name: self.online_identities.get(name, {'steam_name': name})
+                for name in self.online_players
+            }
             self.live_stats = stats
             await self.ws_manager.broadcast({'type': 'stats', 'data': stats})
         except json.JSONDecodeError:

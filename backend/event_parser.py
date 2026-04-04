@@ -57,6 +57,37 @@ PATTERNS = {
     ],
 }
 
+# ─── Player identity extraction from HumanitZ log format ───
+# Format: "blae (76561198054619063_+_|...) Lv:27 Clan:LostBoys DPassed:39 has"
+_IDENTITY_RE = re.compile(
+    r'^(?P<steam_name>[^\(]+?)\s*'
+    r'\((?P<steam_id>\d{17})'
+    r'(?:_\+_\|(?P<game_uid>[0-9a-f]+))?'
+    r'\)\s*'
+    r'(?:Lv:(?P<level>\d+)\s*)?'
+    r'(?:Clan:(?P<clan>\S+)\s*)?'
+    r'(?:DPassed:(?P<days>\d+)\s*)?'
+)
+
+
+def parse_player_identity(raw_name: str) -> dict:
+    """Extract structured identity from a HumanitZ player string."""
+    if not raw_name:
+        return {'raw': raw_name, 'steam_name': raw_name}
+    m = _IDENTITY_RE.match(raw_name.strip())
+    if not m:
+        return {'raw': raw_name, 'steam_name': raw_name.strip()}
+    return {
+        'raw': raw_name,
+        'steam_name': m.group('steam_name').strip(),
+        'steam_id': m.group('steam_id'),
+        'game_uid': m.group('game_uid') or '',
+        'level': int(m.group('level')) if m.group('level') else None,
+        'clan': m.group('clan') or '',
+        'days_passed': int(m.group('days')) if m.group('days') else None,
+    }
+
+
 SEVERITY_MAP = {
     'player_connect': 'info',
     'player_disconnect': 'info',

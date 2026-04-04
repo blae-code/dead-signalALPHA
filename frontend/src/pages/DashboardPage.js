@@ -14,6 +14,7 @@ import KeyManagement from '@/components/KeyManagement';
 import FactionPanel from '@/components/FactionPanel';
 import GameMasterPanel from '@/components/GameMasterPanel';
 import PlayerStats from '@/components/PlayerStats';
+import SteamLinkCard from '@/components/SteamLinkCard';
 import ResourceHub from '@/components/ResourceHub';
 import WeatherOverlay from '@/components/WeatherOverlay';
 import LiveStatusBar from '@/components/LiveStatusBar';
@@ -49,6 +50,7 @@ export default function DashboardPage({ user: propUser, onLogout }) {
   const [filePath, setFilePath] = useState('/');
   const [onlineCount, setOnlineCount] = useState(0);
   const [onlinePlayers, setOnlinePlayers] = useState([]);
+  const [onlineIdentities, setOnlineIdentities] = useState({});
   const [activeTab, setActiveTab] = useState('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -126,6 +128,7 @@ export default function DashboardPage({ user: propUser, onLogout }) {
   useEffect(() => {
     if (liveStats?.online_count != null) setOnlineCount(liveStats.online_count);
     if (liveStats?.online_players) setOnlinePlayers(liveStats.online_players);
+    if (liveStats?.online_identities) setOnlineIdentities(liveStats.online_identities);
   }, [liveStats]);
 
   const allEvents = useMemo(() => {
@@ -315,7 +318,7 @@ export default function DashboardPage({ user: propUser, onLogout }) {
           <TabsContent value="overview" className="mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-1 space-y-4">
-                <ServerStatus data={serverData} liveStats={liveStats} liveState={currentState} onRefresh={fetchServer} isAdmin={isAdmin} onlineCount={onlineCount} onlinePlayers={onlinePlayers} />
+                <ServerStatus data={serverData} liveStats={liveStats} liveState={currentState} onRefresh={fetchServer} isAdmin={isAdmin} onlineCount={onlineCount} onlinePlayers={onlinePlayers} onlineIdentities={onlineIdentities} />
                 <WorldConditions liveWorldState={worldState} />
               </div>
               <div className="lg:col-span-2 space-y-4">
@@ -330,7 +333,14 @@ export default function DashboardPage({ user: propUser, onLogout }) {
           </TabsContent>
 
           <TabsContent value="stats" className="mt-0">
-            <PlayerStats />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2">
+                <PlayerStats />
+              </div>
+              <div>
+                <SteamLinkCard />
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="alerts" className="mt-0">

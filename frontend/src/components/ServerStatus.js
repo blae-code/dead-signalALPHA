@@ -4,7 +4,7 @@ import {
   Cpu, HardDrive, MemoryStick, Power, RotateCcw, Square, Zap, RefreshCw, WifiOff, Users,
 } from 'lucide-react';
 
-export default function ServerStatus({ data, liveStats, liveState, onRefresh, isAdmin, onlineCount, onlinePlayers = [] }) {
+export default function ServerStatus({ data, liveStats, liveState, onRefresh, isAdmin, onlineCount, onlinePlayers = [], onlineIdentities = {} }) {
   const [powerLoading, setPowerLoading] = useState('');
 
   const res = data?.resources?.attributes;
@@ -120,12 +120,18 @@ export default function ServerStatus({ data, liveStats, liveState, onRefresh, is
                   <Users className="w-3 h-3" /> Active Roster
                 </div>
                 <div className="space-y-0.5">
-                  {onlinePlayers.map((name) => (
-                    <div key={name} className="flex items-center gap-1.5 text-xs font-mono">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#6b7a3d] animate-pulse shrink-0" />
-                      <span className="text-[#d4cfc4] truncate">{name}</span>
-                    </div>
-                  ))}
+                  {onlinePlayers.map((name) => {
+                    const identity = onlineIdentities[name] || {};
+                    const displayName = identity.steam_name || name;
+                    return (
+                      <div key={name} className="flex items-center gap-1.5 text-xs font-mono">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#6b7a3d] animate-pulse shrink-0" />
+                        <span className="text-[#d4cfc4] truncate">{displayName}</span>
+                        {identity.level != null && <span className="text-[#88837a]/50 text-[10px]">Lv:{identity.level}</span>}
+                        {identity.clan && <span className="text-[#88837a]/50 text-[10px]">[{identity.clan}]</span>}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
