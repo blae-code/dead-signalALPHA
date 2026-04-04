@@ -276,6 +276,8 @@ class PterodactylWSConsumer:
         try:
             stats = json.loads(stats_json)
             stats['state'] = self.server_state
+            stats['online_players'] = list(self.online_players.keys())
+            stats['online_count'] = len(self.online_players)
             self.live_stats = stats
             await self.ws_manager.broadcast({'type': 'stats', 'data': stats})
         except json.JSONDecodeError:

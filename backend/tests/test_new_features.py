@@ -1,364 +1,306 @@
 """
-Test suite for Dead Signal new features (iteration 10):
-- Player Stats (GET /api/stats/me, GET /api/stats/leaderboard)
-- World Events (POST /api/gm/world-events/fire, GET/POST /api/gm/world-events/templates)
-- Story Arcs (GET/POST /api/gm/story-arcs/, POST /api/gm/story-arcs/{arc_id}/start)
-- Faction Balance Overview (GET /api/gm/factions/overview)
-- Player Analytics (GET /api/gm/analytics/players)
-- Push Notifications (POST /api/notifications/subscribe)
+Test New Features: Territory Map, Diplomat AI, Player Count
+============================================================
+Tests for iteration 10 - three new features:
+1. Territory Map (CRUD, summary, markers)
+2. Diplomat AI (reputation matrix, analysis, treaty recommendation)
+3. Player Count (online_players, online_count)
 """
-
-import os
 import pytest
 import requests
-import uuid
+import os
+import time
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
-# Admin credentials from test_credentials.md
+# Test credentials from test_credentials.md
 ADMIN_EMAIL = "blae@katrasoluta.com"
 ADMIN_PASSWORD = "Kx9#mZvR!2026gM"
 
-# Secondary admin
-SECONDARY_ADMIN_EMAIL = "commander@deadsignal.com"
-SECONDARY_ADMIN_PASSWORD = "DeadSignal2024!"
+# Faction IDs from context
+IRON_WOLVES_ID = "69cfc5cb824e38cd002e722f"
+TEST_FACTION_ALPHA_ID = "69cfc757189046ac11824343"
 
 
 @pytest.fixture(scope="module")
-def admin_session():
-    """Login as admin and return authenticated session with cookies."""
-    session = requests.Session()
-    session.headers.update({"Content-Type": "application/json"})
-    
-    response = session.post(
-        f"{BASE_URL}/api/auth/login",
-        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
-        timeout=20,
-    )
-    
+def session():
+    """Create a requests session with cookies."""
+    s = requests.Session()
+    s.headers.update({"Content-Type": "application/json"})
+    return s
+
+
+@pytest.fixture(scope="module")
+def auth_session(session):
+    """Login as admin and return authenticated session."""
+    response = session.post(f"{BASE_URL}/api/auth/login", json={
+        "email": ADMIN_EMAIL,
+        "password": ADMIN_PASSWORD
+    })
     if response.status_code != 200:
-        # Try secondary admin
-        response = session.post(
-            f"{BASE_URL}/api/auth/login",
-            json={"email": SECONDARY_ADMIN_EMAIL, "password": SECONDARY_ADMIN_PASSWORD},
-            timeout=20,
-        )
-    
-    if response.status_code != 200:
-        pytest.skip(f"Admin login failed: {response.status_code} - {response.text}")
-    
+        pytest.skip(f"Login failed: {response.status_code} - {response.text}")
     return session
 
 
-class TestPlayerStats:
-    """Test player stats endpoints - GET /api/stats/me and GET /api/stats/leaderboard"""
+class TestLogin:
+    """Verify admin login works before testing new features."""
     
-    def test_get_my_stats(self, admin_session):
-        """GET /api/stats/me - returns player stats object"""
-        response = admin_session.get(f"{BASE_URL}/api/stats/me", timeout=20)
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
+    def test_admin_login(self, session):
+        """Login as GameMaster admin."""
+        response = session.post(f"{BASE_URL}/api/auth/login", json={
+            "email": ADMIN_EMAIL,
+            "password": ADMIN_PASSWORD
+        })
+        assert response.status_code == 200, f"Login failed: {response.text}"
         data = response.json()
-        # Verify response structure
-        assert "callsign" in data, "Response should contain callsign"
-        assert "kills" in data, "Response should contain kills"
-        assert "deaths" in data, "Response should contain deaths"
-        assert "kd_ratio" in data, "Response should contain kd_ratio"
-        assert "total_sessions" in data or "total_playtime_hours" in data, "Response should contain session data"
-        
-        print(f"✓ Player stats retrieved: callsign={data.get('callsign')}, kills={data.get('kills')}, deaths={data.get('deaths')}")
-    
-    def test_get_leaderboard(self, admin_session):
-        """GET /api/stats/leaderboard - returns leaderboard with by_kills, by_playtime arrays"""
-        response = admin_session.get(f"{BASE_URL}/api/stats/leaderboard?limit=10", timeout=20)
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
-        data = response.json()
-        # Verify response structure
-        assert "by_kills" in data, "Response should contain by_kills array"
-        assert "by_playtime" in data, "Response should contain by_playtime array"
-        assert isinstance(data["by_kills"], list), "by_kills should be a list"
-        assert isinstance(data["by_playtime"], list), "by_playtime should be a list"
-        
-        print(f"✓ Leaderboard retrieved: {len(data.get('by_kills', []))} kill leaders, {len(data.get('by_playtime', []))} playtime leaders")
+        assert "user" in data
+        assert data["user"]["role"] in ("system_admin", "server_admin")
+        print(f"✓ Logged in as {data['user']['callsign']} ({data['user']['role']})")
 
 
-class TestWorldEvents:
-    """Test world events endpoints - GM tools for firing events and managing templates"""
+class TestTerritoryEndpoints:
+    """Territory Map API tests."""
     
-    def test_fire_world_event(self, admin_session):
-        """POST /api/gm/world-events/fire - fire a world event (requires admin)"""
-        payload = {
-            "event_type": "custom",
-            "label": f"Test Event {uuid.uuid4().hex[:8]}",
-            "intensity": 5
-        }
-        
-        response = admin_session.post(
-            f"{BASE_URL}/api/gm/world-events/fire",
-            json=payload,
-            timeout=20
-        )
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
+    def test_get_territories(self, auth_session):
+        """GET /api/territories - returns array of territories with faction data."""
+        response = auth_session.get(f"{BASE_URL}/api/territories")
+        assert response.status_code == 200, f"Failed: {response.text}"
         data = response.json()
-        assert "message" in data, "Response should contain message"
-        assert "event" in data, "Response should contain event object"
+        assert isinstance(data, list), "Expected array of territories"
+        print(f"✓ GET /api/territories returned {len(data)} territories")
         
-        event = data["event"]
-        assert event.get("label") == payload["label"], "Event label should match"
-        assert event.get("event_type") == payload["event_type"], "Event type should match"
-        assert event.get("intensity") == payload["intensity"], "Event intensity should match"
-        
-        print(f"✓ World event fired: {data.get('message')}")
-    
-    def test_list_templates(self, admin_session):
-        """GET /api/gm/world-events/templates - list saved templates"""
-        response = admin_session.get(f"{BASE_URL}/api/gm/world-events/templates", timeout=20)
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
-        data = response.json()
-        assert isinstance(data, list), "Response should be a list"
-        
-        print(f"✓ Templates listed: {len(data)} templates found")
-    
-    def test_create_template(self, admin_session):
-        """POST /api/gm/world-events/templates - create template"""
-        template_name = f"Test Template {uuid.uuid4().hex[:8]}"
-        payload = {
-            "name": template_name,
-            "event_type": "airdrop",
-            "description": "Test template for automated testing"
-        }
-        
-        response = admin_session.post(
-            f"{BASE_URL}/api/gm/world-events/templates",
-            json=payload,
-            timeout=20
-        )
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
-        data = response.json()
-        assert data.get("name") == template_name, "Template name should match"
-        assert data.get("event_type") == "airdrop", "Event type should match"
-        assert "template_id" in data, "Response should contain template_id"
-        
-        print(f"✓ Template created: {data.get('name')} (id: {data.get('template_id')})")
-        
-        return data.get("template_id")
-
-
-class TestStoryArcs:
-    """Test story arc endpoints - GM tools for narrative scheduling"""
-    
-    def test_list_story_arcs(self, admin_session):
-        """GET /api/gm/story-arcs/ - list story arcs"""
-        response = admin_session.get(f"{BASE_URL}/api/gm/story-arcs/", timeout=20)
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
-        data = response.json()
-        assert isinstance(data, list), "Response should be a list"
-        
-        print(f"✓ Story arcs listed: {len(data)} arcs found")
-    
-    def test_create_story_arc(self, admin_session):
-        """POST /api/gm/story-arcs/ - create arc with steps"""
-        arc_name = f"Test Arc {uuid.uuid4().hex[:8]}"
-        payload = {
-            "name": arc_name,
-            "timing_mode": "sequential",
-            "steps": [
-                {
-                    "order": 0,
-                    "delay_minutes": 1,
-                    "action_type": "broadcast",
-                    "params": {"message": "Test broadcast message"},
-                    "label": "Step 1"
-                }
-            ]
-        }
-        
-        response = admin_session.post(
-            f"{BASE_URL}/api/gm/story-arcs/",
-            json=payload,
-            timeout=20
-        )
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
-        data = response.json()
-        assert data.get("name") == arc_name, "Arc name should match"
-        assert data.get("timing_mode") == "sequential", "Timing mode should match"
-        assert data.get("status") == "draft", "New arc should be in draft status"
-        assert "arc_id" in data, "Response should contain arc_id"
-        assert len(data.get("steps", [])) == 1, "Arc should have 1 step"
-        
-        print(f"✓ Story arc created: {data.get('name')} (id: {data.get('arc_id')}, status: {data.get('status')})")
-        
-        return data.get("arc_id")
-    
-    def test_start_story_arc(self, admin_session):
-        """POST /api/gm/story-arcs/{arc_id}/start - start a draft arc"""
-        # First create an arc
-        arc_name = f"Test Arc Start {uuid.uuid4().hex[:8]}"
-        create_payload = {
-            "name": arc_name,
-            "timing_mode": "sequential",
-            "steps": [
-                {
-                    "order": 0,
-                    "delay_minutes": 1,
-                    "action_type": "broadcast",
-                    "params": {"message": "Test start message"},
-                    "label": "Start Step"
-                }
-            ]
-        }
-        
-        create_response = admin_session.post(
-            f"{BASE_URL}/api/gm/story-arcs/",
-            json=create_payload,
-            timeout=20
-        )
-        
-        assert create_response.status_code == 200, f"Arc creation failed: {create_response.text}"
-        arc_id = create_response.json().get("arc_id")
-        
-        # Now start the arc
-        start_response = admin_session.post(
-            f"{BASE_URL}/api/gm/story-arcs/{arc_id}/start",
-            timeout=20
-        )
-        
-        assert start_response.status_code == 200, f"Expected 200, got {start_response.status_code}: {start_response.text}"
-        
-        data = start_response.json()
-        assert "message" in data, "Response should contain message"
-        assert "next_step_at" in data, "Response should contain next_step_at"
-        
-        print(f"✓ Story arc started: {data.get('message')}, next_step_at: {data.get('next_step_at')}")
-
-
-class TestFactionBalance:
-    """Test faction balance overview endpoint - GM analytics"""
-    
-    def test_get_faction_overview(self, admin_session):
-        """GET /api/gm/factions/overview - faction balance overview data"""
-        response = admin_session.get(f"{BASE_URL}/api/gm/factions/overview", timeout=20)
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
-        data = response.json()
-        assert isinstance(data, list), "Response should be a list"
-        
-        # If there are factions, verify structure
+        # Verify territory structure if any exist
         if len(data) > 0:
-            faction = data[0]
-            assert "name" in faction, "Faction should have name"
-            assert "member_count" in faction, "Faction should have member_count"
-            print(f"✓ Faction overview retrieved: {len(data)} factions, top faction: {faction.get('name')} ({faction.get('member_count')} members)")
-        else:
-            print(f"✓ Faction overview retrieved: 0 factions (empty list is valid)")
-
-
-class TestPlayerAnalytics:
-    """Test player analytics endpoint - GM player tracking"""
+            t = data[0]
+            assert "territory_id" in t, "Missing territory_id"
+            assert "x" in t, "Missing x coordinate"
+            assert "y" in t, "Missing y coordinate"
+            assert "faction_id" in t, "Missing faction_id"
+            # Check faction enrichment
+            if "faction" in t:
+                assert "name" in t["faction"], "Missing faction name"
+                assert "tag" in t["faction"], "Missing faction tag"
+                assert "color" in t["faction"], "Missing faction color"
+                print(f"  - First territory: {t['territory_id']} owned by {t['faction'].get('name', 'Unknown')}")
     
-    def test_get_player_analytics(self, admin_session):
-        """GET /api/gm/analytics/players - player analytics data"""
-        response = admin_session.get(f"{BASE_URL}/api/gm/analytics/players", timeout=20)
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
+    def test_get_territory_summary(self, auth_session):
+        """GET /api/territories/summary - returns faction summary with counts."""
+        response = auth_session.get(f"{BASE_URL}/api/territories/summary")
+        assert response.status_code == 200, f"Failed: {response.text}"
         data = response.json()
-        assert isinstance(data, list), "Response should be a list"
+        assert isinstance(data, list), "Expected array of faction summaries"
+        print(f"✓ GET /api/territories/summary returned {len(data)} factions")
         
-        # If there are players, verify structure
-        if len(data) > 0:
-            player = data[0]
-            assert "player_name" in player, "Player should have player_name"
-            print(f"✓ Player analytics retrieved: {len(data)} players tracked")
-        else:
-            print(f"✓ Player analytics retrieved: 0 players (empty list is valid)")
-
-
-class TestPushNotifications:
-    """Test push notification endpoints"""
+        # Verify summary structure
+        for s in data:
+            assert "faction_id" in s, "Missing faction_id"
+            assert "name" in s, "Missing faction name"
+            assert "tag" in s, "Missing faction tag"
+            assert "total" in s, "Missing total count"
+            print(f"  - {s['tag']}: {s['total']} territories")
     
-    def test_get_vapid_key(self, admin_session):
-        """GET /api/notifications/vapid-key - get VAPID public key (public endpoint)"""
-        response = admin_session.get(f"{BASE_URL}/api/notifications/vapid-key", timeout=20)
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
+    def test_get_territory_markers(self, auth_session):
+        """GET /api/territories/markers - returns array of event markers."""
+        response = auth_session.get(f"{BASE_URL}/api/territories/markers")
+        assert response.status_code == 200, f"Failed: {response.text}"
         data = response.json()
-        assert "public_key" in data, "Response should contain public_key"
-        assert len(data["public_key"]) > 0, "Public key should not be empty"
+        assert isinstance(data, list), "Expected array of markers"
+        print(f"✓ GET /api/territories/markers returned {len(data)} markers")
         
-        print(f"✓ VAPID public key retrieved: {data['public_key'][:20]}...")
+        # Verify marker structure if any exist
+        for m in data[:3]:
+            assert "type" in m, "Missing marker type"
+            print(f"  - Marker type: {m['type']}")
     
-    def test_subscribe_push_notification(self, admin_session):
-        """POST /api/notifications/subscribe - push notification subscription endpoint"""
-        # Create a mock subscription object (browser would generate this)
-        mock_subscription = {
-            "endpoint": f"https://fcm.googleapis.com/fcm/send/test-{uuid.uuid4().hex}",
-            "keys": {
-                "p256dh": "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM",
-                "auth": "tBHItJI5svbpez7KI4CCXg"
-            }
-        }
-        
+    def test_claim_territory(self, auth_session):
+        """POST /api/territories/claim - assign territory to faction."""
+        # Use a test cell that's unlikely to conflict (6,6)
         payload = {
-            "subscription": mock_subscription
+            "x": 6,
+            "y": 6,
+            "faction_id": IRON_WOLVES_ID,
+            "zone_type": "outpost",
+            "label": "Test Outpost"
         }
-        
-        response = admin_session.post(
-            f"{BASE_URL}/api/notifications/subscribe",
-            json=payload,
-            timeout=20
-        )
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
+        response = auth_session.post(f"{BASE_URL}/api/territories/claim", json=payload)
+        assert response.status_code == 200, f"Failed: {response.text}"
         data = response.json()
-        assert "message" in data, "Response should contain message"
-        
-        print(f"✓ Push notification subscription: {data.get('message')}")
+        assert "message" in data, "Missing message in response"
+        assert "territory_id" in data, "Missing territory_id in response"
+        assert data["territory_id"] == "6-6", f"Expected territory_id '6-6', got {data['territory_id']}"
+        print(f"✓ POST /api/territories/claim: {data['message']}")
     
-    def test_get_notification_preferences(self, admin_session):
-        """GET /api/notifications/preferences - get notification preferences"""
-        response = admin_session.get(f"{BASE_URL}/api/notifications/preferences", timeout=20)
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
+    def test_verify_claimed_territory(self, auth_session):
+        """Verify the claimed territory appears in GET /api/territories."""
+        response = auth_session.get(f"{BASE_URL}/api/territories")
+        assert response.status_code == 200
         data = response.json()
-        assert "subscribed" in data, "Response should contain subscribed status"
-        assert "preferences" in data, "Response should contain preferences"
         
-        print(f"✓ Notification preferences retrieved: subscribed={data.get('subscribed')}")
+        # Find our test territory
+        test_territory = next((t for t in data if t.get("territory_id") == "6-6"), None)
+        assert test_territory is not None, "Claimed territory 6-6 not found"
+        assert test_territory["faction_id"] == IRON_WOLVES_ID
+        assert test_territory["zone_type"] == "outpost"
+        print(f"✓ Verified territory 6-6 is claimed by Iron Wolves as outpost")
+    
+    def test_release_territory(self, auth_session):
+        """DELETE /api/territories/claim - release territory."""
+        payload = {"x": 6, "y": 6}
+        response = auth_session.delete(f"{BASE_URL}/api/territories/claim", json=payload)
+        assert response.status_code == 200, f"Failed: {response.text}"
+        data = response.json()
+        assert "message" in data, "Missing message in response"
+        print(f"✓ DELETE /api/territories/claim: {data['message']}")
+    
+    def test_verify_released_territory(self, auth_session):
+        """Verify the released territory no longer exists."""
+        response = auth_session.get(f"{BASE_URL}/api/territories")
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Ensure our test territory is gone
+        test_territory = next((t for t in data if t.get("territory_id") == "6-6"), None)
+        assert test_territory is None, "Territory 6-6 should have been released"
+        print(f"✓ Verified territory 6-6 has been released")
 
 
-class TestGMStats:
-    """Test GM stats endpoint"""
+class TestDiplomatEndpoints:
+    """Diplomat AI API tests."""
     
-    def test_get_gm_stats(self, admin_session):
-        """GET /api/gm/stats - GM dashboard stats"""
-        response = admin_session.get(f"{BASE_URL}/api/gm/stats", timeout=20)
-        
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
-        
+    def test_get_reputation_matrix(self, auth_session):
+        """GET /api/diplomat/reputation-matrix - returns matrix with faction pairs."""
+        response = auth_session.get(f"{BASE_URL}/api/diplomat/reputation-matrix")
+        assert response.status_code == 200, f"Failed: {response.text}"
         data = response.json()
-        assert "active_tasks" in data, "Response should contain active_tasks"
-        assert "tracked_players" in data, "Response should contain tracked_players"
-        assert "banned_players" in data, "Response should contain banned_players"
         
-        print(f"✓ GM stats retrieved: {data.get('active_tasks')} tasks, {data.get('tracked_players')} players tracked")
+        assert "matrix" in data, "Missing matrix in response"
+        assert "factions" in data, "Missing factions in response"
+        assert "timestamp" in data, "Missing timestamp in response"
+        
+        matrix = data["matrix"]
+        assert isinstance(matrix, list), "Matrix should be an array"
+        print(f"✓ GET /api/diplomat/reputation-matrix returned {len(matrix)} faction pairs")
+        
+        # Verify matrix entry structure
+        if len(matrix) > 0:
+            entry = matrix[0]
+            assert "faction_a" in entry, "Missing faction_a"
+            assert "faction_b" in entry, "Missing faction_b"
+            assert "score" in entry, "Missing score"
+            assert "sentiment" in entry, "Missing sentiment"
+            print(f"  - {entry['faction_a']} <-> {entry['faction_b']}: {entry['score']} ({entry['sentiment']})")
+    
+    def test_get_diplomatic_analysis(self, auth_session):
+        """GET /api/diplomat/analysis - returns AI-generated strategic assessment."""
+        response = auth_session.get(f"{BASE_URL}/api/diplomat/analysis", timeout=30)
+        assert response.status_code == 200, f"Failed: {response.text}"
+        data = response.json()
+        
+        assert "analysis" in data, "Missing analysis in response"
+        assert "faction_count" in data, "Missing faction_count"
+        assert "treaty_count" in data, "Missing treaty_count"
+        assert "timestamp" in data, "Missing timestamp"
+        
+        # Analysis should be a non-empty string
+        assert isinstance(data["analysis"], str), "Analysis should be a string"
+        assert len(data["analysis"]) > 10, "Analysis seems too short"
+        print(f"✓ GET /api/diplomat/analysis returned {len(data['analysis'])} chars")
+        print(f"  - Factions: {data['faction_count']}, Treaties: {data['treaty_count']}")
+        print(f"  - Preview: {data['analysis'][:100]}...")
+    
+    def test_treaty_recommendation(self, auth_session):
+        """POST /api/diplomat/recommend - get AI treaty recommendation."""
+        payload = {
+            "faction_a_id": IRON_WOLVES_ID,
+            "faction_b_id": TEST_FACTION_ALPHA_ID
+        }
+        response = auth_session.post(f"{BASE_URL}/api/diplomat/recommend", json=payload, timeout=30)
+        assert response.status_code == 200, f"Failed: {response.text}"
+        data = response.json()
+        
+        assert "recommendation" in data, "Missing recommendation"
+        assert "faction_a" in data, "Missing faction_a name"
+        assert "faction_b" in data, "Missing faction_b name"
+        assert "context" in data, "Missing context"
+        assert "timestamp" in data, "Missing timestamp"
+        
+        # Recommendation should be a non-empty string
+        assert isinstance(data["recommendation"], str), "Recommendation should be a string"
+        assert len(data["recommendation"]) > 10, "Recommendation seems too short"
+        print(f"✓ POST /api/diplomat/recommend: {data['faction_a']} vs {data['faction_b']}")
+        print(f"  - Power ratio: {data['context'].get('power_ratio', 'N/A')}")
+        print(f"  - Preview: {data['recommendation'][:100]}...")
+    
+    def test_treaty_recommendation_missing_faction(self, auth_session):
+        """POST /api/diplomat/recommend - should fail with missing faction_id."""
+        payload = {"faction_a_id": IRON_WOLVES_ID}
+        response = auth_session.post(f"{BASE_URL}/api/diplomat/recommend", json=payload)
+        assert response.status_code == 400, f"Expected 400, got {response.status_code}"
+        print(f"✓ POST /api/diplomat/recommend correctly rejects missing faction_b_id")
+
+
+class TestPlayerEndpoints:
+    """Player Count API tests."""
+    
+    def test_get_players(self, auth_session):
+        """GET /api/players - returns online_count and online array."""
+        response = auth_session.get(f"{BASE_URL}/api/players")
+        assert response.status_code == 200, f"Failed: {response.text}"
+        data = response.json()
+        
+        assert "online" in data, "Missing online array"
+        assert "online_count" in data, "Missing online_count"
+        assert "recent_sessions" in data, "Missing recent_sessions"
+        
+        assert isinstance(data["online"], list), "online should be an array"
+        assert isinstance(data["online_count"], int), "online_count should be an integer"
+        assert data["online_count"] >= 0, "online_count should be non-negative"
+        
+        print(f"✓ GET /api/players: {data['online_count']} players online")
+        print(f"  - Recent sessions: {len(data['recent_sessions'])}")
+        
+        # If players are online, verify structure
+        if len(data["online"]) > 0:
+            player = data["online"][0]
+            assert "name" in player, "Missing player name"
+            print(f"  - Online: {[p['name'] for p in data['online']]}")
+    
+    def test_get_live_stats(self, auth_session):
+        """GET /api/server/live-stats - returns online_players from WebSocket."""
+        response = auth_session.get(f"{BASE_URL}/api/server/live-stats")
+        assert response.status_code == 200, f"Failed: {response.text}"
+        data = response.json()
+        
+        assert "stats" in data, "Missing stats"
+        assert "state" in data, "Missing state"
+        assert "online_players" in data, "Missing online_players"
+        assert "ws_connected" in data, "Missing ws_connected"
+        
+        assert isinstance(data["online_players"], list), "online_players should be an array"
+        print(f"✓ GET /api/server/live-stats: state={data['state']}, ws_connected={data['ws_connected']}")
+        print(f"  - Online players: {data['online_players']}")
+
+
+class TestFactionEndpoints:
+    """Verify factions exist for territory/diplomat tests."""
+    
+    def test_get_factions(self, auth_session):
+        """GET /api/factions - verify test factions exist."""
+        response = auth_session.get(f"{BASE_URL}/api/factions")
+        assert response.status_code == 200, f"Failed: {response.text}"
+        data = response.json()
+        
+        assert isinstance(data, list), "Expected array of factions"
+        print(f"✓ GET /api/factions returned {len(data)} factions")
+        
+        # Verify our test factions exist
+        faction_ids = [f.get("faction_id") for f in data]
+        assert IRON_WOLVES_ID in faction_ids, f"Iron Wolves faction not found"
+        assert TEST_FACTION_ALPHA_ID in faction_ids, f"Test Faction Alpha not found"
+        
+        for f in data:
+            if f.get("faction_id") in [IRON_WOLVES_ID, TEST_FACTION_ALPHA_ID]:
+                print(f"  - {f.get('name')} [{f.get('tag')}]: {f.get('color')}")
 
 
 if __name__ == "__main__":

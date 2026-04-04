@@ -34,6 +34,9 @@ from routes.analytics import init_analytics_routes
 from routes.world_events import init_world_events_routes
 from routes.story_arcs import init_story_arc_routes
 from routes.notifications import init_notification_routes
+from routes.diplomat import init_diplomat_routes
+from routes.territories import init_territory_routes
+from diplomat_ai import DiplomatAI
 from scheduler import Scheduler
 
 # Logging
@@ -1095,3 +1098,13 @@ app.include_router(story_arcs_router)
 # Push Notification routes
 notification_router = init_notification_routes(db, get_current_user)
 app.include_router(notification_router)
+
+
+# Diplomat AI routes
+diplomat = DiplomatAI()
+diplomat_router = init_diplomat_routes(db, get_current_user, require_server_admin, diplomat)
+app.include_router(diplomat_router)
+
+# Territory map routes
+territory_router = init_territory_routes(db, get_current_user, require_server_admin)
+app.include_router(territory_router)

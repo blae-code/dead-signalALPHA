@@ -5,7 +5,7 @@ import {
   Zap, Clock, MessageSquare, Shield, Users, Terminal, AlertTriangle,
   Play, Pause, Trash2, RefreshCw, Plus, Send, Eye, X, ChevronRight,
   Radio, FileText, Ban, UserCheck, Settings, RotateCcw, HardDrive, Volume2,
-  User, Target,
+  User, Target, Handshake,
 } from 'lucide-react';
 import NPCPanel from '@/components/NPCPanel';
 import MissionPanel from '@/components/MissionPanel';
@@ -13,6 +13,7 @@ import WorldEventComposer from '@/components/WorldEventComposer';
 import FactionBalanceOverview from '@/components/FactionBalanceOverview';
 import StoryArcScheduler from '@/components/StoryArcScheduler';
 import PlayerAnalytics from '@/components/PlayerAnalytics';
+import DiplomatPanel from '@/components/DiplomatPanel';
 
 const ACTION_ICONS = {
   restart: <RotateCcw className="w-3 h-3" />,
@@ -46,6 +47,7 @@ export default function GameMasterPanel() {
     { id: 'world-event', label: 'World Events',    icon: <Zap className="w-3 h-3" /> },
     { id: 'story-arcs',  label: 'Story Arcs',      icon: <FileText className="w-3 h-3" /> },
     { id: 'faction-bal', label: 'Factions',         icon: <Shield className="w-3 h-3" /> },
+    { id: 'diplomat',    label: 'Diplomat AI',      icon: <Handshake className="w-3 h-3" /> },
     { id: 'analytics',   label: 'Analytics',        icon: <Eye className="w-3 h-3" /> },
     { id: 'npcs',        label: 'NPCs',             icon: <User className="w-3 h-3" /> },
     { id: 'missions',    label: 'Missions',         icon: <Target className="w-3 h-3" /> },
@@ -81,6 +83,7 @@ export default function GameMasterPanel() {
       {tab === 'world-event' && <WorldEventComposer />}
       {tab === 'story-arcs'  && <StoryArcScheduler />}
       {tab === 'faction-bal' && <FactionBalanceOverview />}
+      {tab === 'diplomat'    && <DiplomatPanel />}
       {tab === 'analytics'   && <PlayerAnalytics />}
       {tab === 'npcs'        && <NPCPanel />}
       {tab === 'missions'    && <MissionPanel />}

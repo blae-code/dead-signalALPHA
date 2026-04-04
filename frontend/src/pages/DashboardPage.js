@@ -48,6 +48,7 @@ export default function DashboardPage({ user: propUser, onLogout }) {
   const [files, setFiles] = useState([]);
   const [filePath, setFilePath] = useState('/');
   const [onlineCount, setOnlineCount] = useState(0);
+  const [onlinePlayers, setOnlinePlayers] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -120,6 +121,12 @@ export default function DashboardPage({ user: propUser, onLogout }) {
     const i = setInterval(() => { fetchServer(); fetchOnlineCount(); }, 30000);
     return () => clearInterval(i);
   }, [fetchServer, fetchEvents, fetchOnlineCount]);
+
+  // Sync player count from WebSocket stats (real-time)
+  useEffect(() => {
+    if (liveStats?.online_count != null) setOnlineCount(liveStats.online_count);
+    if (liveStats?.online_players) setOnlinePlayers(liveStats.online_players);
+  }, [liveStats]);
 
   const allEvents = useMemo(() => {
     const seen = new Set();
@@ -308,7 +315,7 @@ export default function DashboardPage({ user: propUser, onLogout }) {
           <TabsContent value="overview" className="mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-1 space-y-4">
-                <ServerStatus data={serverData} liveStats={liveStats} liveState={currentState} onRefresh={fetchServer} isAdmin={isAdmin} onlineCount={onlineCount} />
+                <ServerStatus data={serverData} liveStats={liveStats} liveState={currentState} onRefresh={fetchServer} isAdmin={isAdmin} onlineCount={onlineCount} onlinePlayers={onlinePlayers} />
                 <WorldConditions liveWorldState={worldState} />
               </div>
               <div className="lg:col-span-2 space-y-4">

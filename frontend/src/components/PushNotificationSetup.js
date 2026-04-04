@@ -23,11 +23,6 @@ export default function PushNotificationSetup() {
     server_status: true,
   });
 
-  useEffect(() => {
-    setSupported('serviceWorker' in navigator && 'PushManager' in window && !!VAPID_KEY);
-    checkSubscription();
-  }, []);
-
   const checkSubscription = useCallback(async () => {
     try {
       if (!('serviceWorker' in navigator)) return;
@@ -44,6 +39,11 @@ export default function PushNotificationSetup() {
       }
     } catch { /* graceful */ }
   }, []);
+
+  useEffect(() => {
+    setSupported('serviceWorker' in navigator && 'PushManager' in window && !!VAPID_KEY);
+    checkSubscription();
+  }, [checkSubscription]);
 
   const subscribe = async () => {
     setLoading(true);

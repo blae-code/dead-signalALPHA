@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import api from '@/lib/api';
 import {
-  Cpu, HardDrive, MemoryStick, Power, RotateCcw, Square, Zap, RefreshCw, WifiOff,
+  Cpu, HardDrive, MemoryStick, Power, RotateCcw, Square, Zap, RefreshCw, WifiOff, Users,
 } from 'lucide-react';
 
-export default function ServerStatus({ data, liveStats, liveState, onRefresh, isAdmin, onlineCount }) {
+export default function ServerStatus({ data, liveStats, liveState, onRefresh, isAdmin, onlineCount, onlinePlayers = [] }) {
   const [powerLoading, setPowerLoading] = useState('');
 
   const res = data?.resources?.attributes;
@@ -112,6 +112,23 @@ export default function ServerStatus({ data, liveStats, liveState, onRefresh, is
                 {onlineCount ?? 0} / 12
               </span>
             </div>
+
+            {/* Online Player Roster */}
+            {onlinePlayers.length > 0 && (
+              <div className="border border-[#2a2520] bg-[#0a0a0a] p-2" data-testid="online-roster">
+                <div className="flex items-center gap-1.5 mb-1.5 text-[10px] font-heading uppercase tracking-widest text-[#88837a]">
+                  <Users className="w-3 h-3" /> Active Roster
+                </div>
+                <div className="space-y-0.5">
+                  {onlinePlayers.map((name) => (
+                    <div key={name} className="flex items-center gap-1.5 text-xs font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#6b7a3d] animate-pulse shrink-0" />
+                      <span className="text-[#d4cfc4] truncate">{name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Offline banner */}
             {isOffline && (
