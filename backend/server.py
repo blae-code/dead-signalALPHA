@@ -36,6 +36,8 @@ from routes.notifications import init_notification_routes
 from routes.diplomat import init_diplomat_routes
 from routes.territories import init_territory_routes
 from routes.profile import init_profile_routes
+from routes.loot_intel import init_loot_intel_routes
+from routes.planner import init_planner_routes
 from diplomat_ai import DiplomatAI
 from scheduler import Scheduler
 
@@ -1173,3 +1175,11 @@ app.include_router(territory_router)
 # Profile & Steam linking routes
 profile_router = init_profile_routes(db, get_current_user, require_server_admin)
 app.include_router(profile_router)
+
+# Loot Intelligence routes
+loot_intel_router = init_loot_intel_routes(db, get_current_user)
+app.include_router(loot_intel_router)
+
+# Base Planner routes
+planner_router = init_planner_routes(db, get_current_user)
+app.include_router(planner_router)

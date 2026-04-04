@@ -16,13 +16,14 @@ import GameMasterPanel from '@/components/GameMasterPanel';
 import PlayerStats from '@/components/PlayerStats';
 import SteamLinkCard from '@/components/SteamLinkCard';
 import ResourceHub from '@/components/ResourceHub';
+import SurvivalPlanner from '@/components/SurvivalPlanner';
 import WeatherOverlay from '@/components/WeatherOverlay';
 import LiveStatusBar from '@/components/LiveStatusBar';
 import PushNotificationSetup from '@/components/PushNotificationSetup';
 import { useServerWebSocket } from '@/hooks/useServerWebSocket';
 import {
   Radio, Activity, Terminal, Map, Shield, LogOut, User, ChevronDown, Users, Wifi, WifiOff,
-  Swords, Crosshair, Package, Menu, X, Clock, CalendarDays, BarChart3, Bell,
+  Swords, Crosshair, Package, Menu, X, Clock, CalendarDays, BarChart3, Bell, Layers,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -157,6 +158,7 @@ export default function DashboardPage({ user: propUser, onLogout }) {
     { id: 'players', label: 'Players', icon: <Users className="w-3 h-3" /> },
     { id: 'factions', label: 'Factions', icon: <Swords className="w-3 h-3" /> },
     { id: 'economy', label: 'Economy', icon: <Package className="w-3 h-3" /> },
+    { id: 'operations', label: 'Operations', icon: <Layers className="w-3 h-3" /> },
     { id: 'alerts', label: 'Alerts', icon: <Bell className="w-3 h-3" /> },
     ...(isAdmin ? [{ id: 'gm', label: 'Game Master', icon: <Crosshair className="w-3 h-3" /> }] : []),
     ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: <Shield className="w-3 h-3" /> }] : []),
@@ -365,6 +367,10 @@ export default function DashboardPage({ user: propUser, onLogout }) {
 
           <TabsContent value="economy" className="mt-0">
             <ResourceHub user={user} liveScarcity={scarcityData} liveWorldState={worldState} />
+          </TabsContent>
+
+          <TabsContent value="operations" className="mt-0">
+            <SurvivalPlanner />
           </TabsContent>
 
           {isAdmin && (
