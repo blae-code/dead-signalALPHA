@@ -67,7 +67,7 @@ export default function FactionBalanceOverview() {
                   </div>
                   <div className="text-center">
                     <p className="text-[10px] font-mono text-[#88837a] uppercase">Reputation</p>
-                    <p className="font-heading text-lg text-[#c4841d]">{f.reputation ?? 50}</p>
+                    <p className="font-heading text-lg text-[#c4841d]">{typeof f.reputation === 'number' ? f.reputation : 0}</p>
                   </div>
                 </div>
 

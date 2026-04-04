@@ -546,17 +546,27 @@ async def faction_balance_overview(request: Request):
         except Exception:
             territory = f.get('territory_count', 0)
 
+        # Normalize reputation: could be dict or number in DB
+        raw_rep = f.get('reputation', 0)
+        rep_score = raw_rep if isinstance(raw_rep, (int, float)) else 0
+
+        # Normalize resources: ensure it's a simple dict for display
+        raw_res = f.get('resources', {})
+        resources = raw_res if isinstance(raw_res, dict) else {}
+
         result.append({
             'faction_id':          fid,
             'name':                f.get('name', ''),
             'tag':                 f.get('tag', ''),
+            'leader':              f.get('leader_callsign', 'Unknown'),
+            'status':              f.get('status', 'active'),
             'member_count':        members,
             'active_wars':         active_wars,
             'missions_active':     missions_active,
             'missions_completed':  missions_done,
             'territory_count':     territory,
-            'resources':           f.get('resources', {}),
-            'reputation':          f.get('reputation', 0),
+            'resources':           resources,
+            'reputation':          rep_score,
             'created_at':          f.get('created_at'),
         })
 

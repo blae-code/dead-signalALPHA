@@ -84,7 +84,7 @@ export default function PushNotificationSetup() {
         const sub = await reg.pushManager.getSubscription();
         if (sub) {
           await sub.unsubscribe();
-          await api.post('/notifications/unsubscribe');
+          await api.delete('/notifications/subscribe');
         }
       }
       setSubscribed(false);
@@ -96,7 +96,7 @@ export default function PushNotificationSetup() {
     const updated = { ...prefs, [key]: !prefs[key] };
     setPrefs(updated);
     try {
-      await api.put('/notifications/preferences', { preferences: updated });
+      await api.patch('/notifications/preferences', { [key]: !prefs[key] });
     } catch { /* graceful */ }
   };
 

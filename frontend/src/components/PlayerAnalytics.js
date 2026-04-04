@@ -33,17 +33,27 @@ export default function PlayerAnalytics() {
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: d } = await api.get('/analytics/players');
-      setData(d);
+      const { data: d } = await api.get('/gm/analytics/players');
+      setData(Array.isArray(d) ? d : d?.players || []);
     } catch { /* graceful */ }
     setLoading(false);
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const players = data?.players || [];
+  const players = Array.isArray(data) ? data : [];
 
-  const sorted = [...players].sort((a, b) => {
+  // Normalize field names from API
+  const normalized = players.map((p) => ({
+    ...p,
+    callsign: p.callsign || p.player_name || 'Unknown',
+    total_playtime_hours: p.total_playtime_hours ?? Math.round((p.total_playtime_minutes || 0) / 60 * 10) / 10,
+    kill_count: p.kill_count ?? p.kills ?? 0,
+    total_sessions: p.total_sessions ?? p.session_count ?? 0,
+    sessions_7d: p.sessions_7d ?? 0,
+  }));
+
+  const sorted = [...normalized].sort((a, b) => {
     if (sortBy === 'playtime') return (b.total_playtime_hours || 0) - (a.total_playtime_hours || 0);
     if (sortBy === 'kills') return (b.kill_count || 0) - (a.kill_count || 0);
     if (sortBy === 'recent') return (b.sessions_7d || 0) - (a.sessions_7d || 0);

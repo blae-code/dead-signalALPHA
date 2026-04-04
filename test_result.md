@@ -101,3 +101,228 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Dead Signal — a Rust game server dashboard. Phase 2.5 complete: 7 new features built (Player Stats, Push Notifications, World Event Composer, Faction Balance Overview, Story Arc Scheduler, Player Heat Map & Analytics, NPC Panel). Need comprehensive end-to-end testing of all 7 features."
+
+backend:
+  - task: "Player Stats API"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/stats.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET /api/stats/me (personal stats), GET /api/stats/leaderboard (top players by kills/playtime/kd), GET /api/stats/history?days=7 (activity timeline). Reads from player_sessions and events collections."
+
+  - task: "Push Notifications API"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/notifications.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented POST /api/notifications/subscribe, DELETE /api/notifications/unsubscribe, GET /api/notifications/status, PATCH /api/notifications/preferences. Uses pywebpush for VAPID. VAPID keys must be set in .env; if not set the subscribe endpoint returns 503. Test subscribe/unsubscribe/preferences flow."
+
+  - task: "World Event Composer API"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/world_events.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented POST /api/world-events/fire (fire an event immediately), GET/POST /api/world-events/templates, PATCH/DELETE /api/world-events/templates/{id}. Fires events via Pterodactyl RCON and broadcasts via WebSocket. Requires admin role."
+
+  - task: "Story Arc Scheduler API"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/story_arcs.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented CRUD for story arcs (GET /, POST /, GET /{id}, PATCH /{id}, DELETE /{id}) and lifecycle endpoints POST /{id}/start, /{id}/pause, /{id}/abort. Stores arcs in story_arcs collection. Requires admin role."
+
+  - task: "Player Analytics API"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/analytics.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented GET /api/analytics/summary, GET /api/analytics/players (paginated list with activity scores), GET /api/analytics/players/{name}, GET /api/analytics/activity (server activity over time). Admin only."
+
+  - task: "NPC Panel API"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/npcs.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented full NPC CRUD (GET/POST /api/npcs, GET/PATCH/DELETE /api/npcs/{id}), status updates (POST /api/npcs/{id}/status), spawn (POST /api/npcs/{id}/spawn), director endpoints (GET /api/npcs/director/active, GET /api/npcs/{id}/director, POST /api/npcs/{id}/director/command, POST /api/npcs/{id}/director/link-mission). NPC summary at GET /api/npcs/summary."
+
+  - task: "Faction Balance Overview API"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/factions.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "FactionBalanceOverview frontend reads from existing /api/factions endpoint. Verify factions data returns member counts and resources that the balance overview component can render."
+
+frontend:
+  - task: "Player Stats Component"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/PlayerStats.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Renders personal stats (sessions, playtime, KD), leaderboard tab, and activity history chart. Located in Players tab on dashboard. Calls GET /api/stats/me, /api/stats/leaderboard, /api/stats/history."
+
+  - task: "Push Notification Setup Component"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/PushNotificationSetup.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Renders push notification subscription toggle and per-category preferences (high events, faction alerts, GM broadcasts, server status). Located in Players tab. Calls /api/notifications/* endpoints."
+
+  - task: "World Event Composer Component"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/WorldEventComposer.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "GM tool for composing and firing world events. Has template management and live fire capability. Located inside GameMasterPanel under 'world-event' tab. Admin only."
+
+  - task: "Faction Balance Overview Component"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/FactionBalanceOverview.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Visual overview of faction strengths and resource balance. Located inside GameMasterPanel under 'faction-bal' tab. Admin only."
+
+  - task: "Story Arc Scheduler Component"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/StoryArcScheduler.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Create/manage story arcs with steps, start/pause/abort lifecycle controls. Located inside GameMasterPanel under 'story-arcs' tab. Admin only."
+
+  - task: "Player Heat Map & Analytics Component"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/PlayerAnalytics.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Displays player activity heatmap and analytics summary. Located inside GameMasterPanel under 'analytics' tab. Admin only."
+
+  - task: "NPC Panel Component"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/NPCPanel.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Full NPC management UI: create/edit/delete NPCs, set status, spawn, director commands. Located inside GameMasterPanel under 'npcs' tab. Admin only."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 10
+  run_ui: true
+
+test_plan:
+  current_focus:
+    - "Player Stats API"
+    - "Player Stats Component"
+    - "Push Notifications API"
+    - "Push Notification Setup Component"
+    - "World Event Composer API"
+    - "World Event Composer Component"
+    - "Faction Balance Overview API"
+    - "Faction Balance Overview Component"
+    - "Story Arc Scheduler API"
+    - "Story Arc Scheduler Component"
+    - "Player Heat Map & Analytics Component"
+    - "Player Analytics API"
+    - "NPC Panel API"
+    - "NPC Panel Component"
+  stuck_tasks: []
+  test_all: true
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Phase 2.5 complete. 7 new features have been implemented and integrated into the dashboard but
+      have NOT yet been tested end-to-end. Please test all 14 tasks (7 backend + 7 frontend) listed
+      in test_plan.current_focus.
+
+      KEY CONTEXT:
+      - Login: commander@deadsignal.com / DeadSignal2024! (admin/server-admin role)
+      - The 5 GM tools (WorldEventComposer, FactionBalanceOverview, StoryArcScheduler,
+        PlayerAnalytics, NPCPanel) are all inside the Game Master tab → GameMasterPanel component.
+        GameMasterPanel has its own sub-tab bar. Navigate to each sub-tab to test.
+      - PlayerStats and PushNotificationSetup are in the Players tab.
+      - Push Notifications: VAPID keys may not be configured in .env — if so, subscribe endpoint
+        returns 503. Test the UI renders correctly regardless; note the 503 is expected.
+      - World Event Composer fires events via RCON to Pterodactyl — RCON may not respond in test
+        env. The UI should handle errors gracefully (show error toast, not crash).
+      - Story Arc Scheduler: test create arc, start it, pause it, abort it. Verify state transitions
+        appear correctly in the UI.
+      - NPC Panel: test create NPC, update status, spawn, delete. Also test director command flow.
+      - Player Analytics and Player Stats pull from player_sessions and events collections which
+        may be empty in test env — the components should render empty states gracefully.
+      - All admin-only endpoints should return 403 for non-admin users.
+
+      Please run backend API tests first (pytest or direct HTTP), then UI tests. Report all findings
+      back in this file.
