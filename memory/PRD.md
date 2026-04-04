@@ -1,89 +1,94 @@
 # Dead Signal — Product Requirements Document
 
 ## Overview
-Dead Signal is an AI-narrated companion app for the HumanitZ survival sandbox. It transforms solo/co-op gameplay into a connected, living world via faction politics, a scarcity economy, real-time event narration, and server admin tools.
+Dead Signal is an AI-narrated companion app for the HumanitZ survival sandbox game. It transforms the single-player/co-op experience into an MMO-lite with faction politics, a scarcity economy, real-time event narration, and server admin tools.
 
-## Tech Stack
-- **Frontend**: React, Tailwind CSS, Shadcn/UI
-- **Backend**: FastAPI (Python), Motor (async MongoDB)
-- **Database**: MongoDB
-- **Integrations**: Pterodactyl API (server management), Gemini 2.5 Flash via emergentintegrations (AI narration)
-- **Auth**: Email + password with JWT cookies, bcrypt hashing
+## Core Stack
+- **Frontend**: React + Tailwind CSS + Shadcn/UI (dark tactical theme)
+- **Backend**: FastAPI + MongoDB
+- **Real-time**: WebSocket pipeline (Pterodactyl → Backend → Frontend)
+- **AI**: Gemini 2.5 Flash via emergentintegrations (narrative generation)
+- **Auth**: Email/Password with JWT (HTTP-only cookies), Callsign display names
+- **Server Integration**: Pterodactyl API (RCON, file browser, backups, live stats)
 
 ## Authentication
-- Email + password registration with Callsign (display name)
-- Bcrypt password hashing, JWT access (12h) + refresh (30d) tokens in HTTP-only cookies
-- Brute force protection (5 attempts, 15-min lockout)
-- Password reset via token (user-initiated 1h expiry, admin-generated 24h expiry)
-- Admin seeded from env vars (ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_CALLSIGN)
-- Onboarding flow for new users (5-6 step feature briefing)
-- Roles: system_admin, player
+- Email + Password registration with unique Callsign
+- JWT access/refresh tokens in HTTP-only cookies
+- Roles: `system_admin`, `player`
+- Self-service password recovery (inline token-based flow)
+- Admin can generate reset links from User Management
 
-## What's Implemented
+## Implemented Features
 
-### Phase 1 — Core & Auth (Complete)
-- [x] Tactical Terminal UI Design (dark theme, CRT effects, amber/rust accents)
-- [x] Pterodactyl API Integration (server controls, RCON, live log streaming)
-- [x] Background WebSocket consumer for real-time Pterodactyl console
-- [x] Event Engine (regex-based log parser for player events, weather, time, combat)
-- [x] AI Narrative Layer (Gemini 2.5 Flash parses logs → atmospheric dispatches)
-- [x] Email + Password Authentication (register, login, logout, forgot/reset password)
-- [x] Onboarding flow (5-step briefing for players, 6 for admins)
-- [x] Admin User Management (suspend, activate, delete, promote/demote, reset password links)
-- [x] Live Dashboard with WebSocket data (stats, events, narrations, world state, scarcity)
-- [x] Graceful offline state handling
+### Phase 1: Core Infrastructure (Complete)
+- [x] Tactical Terminal UI Design (dark mode, CRT effects, amber/rust accents, monospace fonts)
+- [x] Pterodactyl API Integration (server controls, live stats, file browser, backups)
+- [x] WebSocket pipeline for live console logs and server stats
+- [x] Event Engine (regex-based log parser)
+- [x] AI Narrative Layer (Gemini 2.5 Flash)
+- [x] Email/Password Auth with Callsign system
+- [x] Password Reset flow (self-service + admin-generated)
+- [x] Onboarding flow for new users
 
-### Phase 2 — Metagame & Admin (Complete)
-- [x] Faction System (CRUD, members, alliances)
-- [x] Game Master Suite (scheduler, event triggers, player admin, RCON broadcasts)
-- [x] AI Narrative In-Game Broadcasting (manual + auto modes)
-- [x] Scarcity Economy (crafting planner, trade board, resource tracking)
-- [x] World Conditions (live weather, time, season, danger level)
-- [x] Dynamic Scarcity Engine (world conditions influence resource values in real-time)
-- [x] Live World State Broadcasting via WebSocket (15s updates)
+### Phase 2: Metagame Layer (Complete)
+- [x] Faction system (CRUD, membership, roles, territory claims)
+- [x] Scarcity Economy (event-driven pricing, resource tracking, marketplace)
+- [x] World Conditions (weather overlays, living status bar, time/season/threat)
+- [x] Live dashboard with graceful offline handling
 
-### Phase 2.5 — Immersion, Utility & Polish (Complete)
-- [x] Password Reset Flow (forgot password + admin reset links)
-- [x] Ambient Weather Overlays (CSS particle effects: rain, snow, storm, fog, blizzard, dust)
-- [x] Living Status Bar (persistent world state below header, visible on every tab)
-- [x] Event/Narration Entry Animations (staggered slide-in reveals)
-- [x] Activity Pulse on Tabs (notification dots for unread events on inactive tabs)
-- [x] Expanded User Profile Dropdown (callsign, email, role, last login, join date)
-- [x] Tab/Panel Transition Animations (fadeSlideIn on active tab content)
-- [x] Responsive Mobile Menu (hamburger toggle, full-screen navigation overlay)
-- [x] Button Micro-interactions (scale on press, smooth hover transitions)
-- [x] Panel Hover Effects (border glow on hover)
+### Phase 2.5: GM Tools & Stats (Complete)
+- [x] Personal Player Stats Dashboard (K/D, session time, kills, activity timeline, leaderboards)
+- [x] Browser Push Notifications (VAPID keys, service worker, subscription management)
+- [x] World Event Composer (fire events with RCON + narrative broadcast, templates)
+- [x] Faction Balance Overview (faction analytics with leader, members, reputation)
+- [x] Story Arc Scheduler (timed narrative beats with steps, start/pause/abort)
+- [x] Player Heat Map & Behaviour Analytics (activity categorization, sort/filter)
+- [x] NPC Director Panel
+- [x] Mission Panel
+- [x] Scheduled Tasks (auto-restart, broadcasts, backups)
+- [x] Event Triggers (auto-respond to game events)
+- [x] Quick RCON Commands
+- [x] GM Broadcast system
+- [x] Player Admin (kick/ban/unban/warn, notes, action history)
+- [x] GM Action Log
+
+### Visual Polish (Complete)
+- [x] Immersive login page with radar background animation
+- [x] Typewriter effect on tagline
+- [x] Weather overlays (rain, snow, fog, storm, dust)
+- [x] Live Status Bar (time, weather, season, threat level)
+- [x] CRT scanline effects
+- [x] Form entrance animations
+
+## Upcoming Tasks (P1-P3)
+
+### Phase 3: Immersion & Integrations (P1-P2)
+- [ ] Diplomat AI Agent (Gemini-powered treaty/reputation engine)
+- [ ] Interactive Territory Map (game map overlays for faction territories)
+- [ ] Player count extraction from connect/disconnect logs
+- [ ] LiveKit voice channels for factions
+- [ ] TTS Narration (OpenAI/ElevenLabs)
+- [ ] Discord webhook broadcaster
+- [ ] Key distribution URLs for player onboarding
+- [ ] Mobile responsive polish
+
+### Refactoring
+- [ ] Extract auth logic from server.py into routes/auth.py
+
+## API Routes
+- Auth: POST /api/auth/register, /login, /logout, /forgot-password, /reset-password, /refresh, GET /me
+- Stats: GET /api/stats/me, /leaderboard, /history
+- GM: POST /api/gm/world-events/fire, /templates, /story-arcs/, /{id}/start|pause|abort
+- GM: GET /api/gm/factions/overview, /analytics/players
+- Notifications: POST /api/notifications/subscribe, DELETE /subscribe, GET|PATCH /preferences
+- Server: GET /api/server/status, /live-stats, /backups, /files
+- WS: /api/ws/feed
 
 ## Database Collections
-- `users`: {callsign, email, password_hash, role, status, onboarded, created_at, last_login}
-- `events`: {timestamp, event_type, raw_log, parsed_data, severity}
-- `narrations`: {event_id, dispatch_text, timestamp}
-- `factions`: {name, tag, members, alliances}
-- `resource_scarcity`: {name, category, base_value, current_value, multiplier, supply_level, trend}
-- `password_resets`: {email, token, expires_at, created_at}
+- users, events, narrations, factions, faction_members
+- world_state, economy_state, password_resets, push_subscriptions
+- gm_tasks, gm_triggers, gm_log, gm_broadcasts, gm_quick_commands
+- story_arcs, world_event_templates, missions, npcs, intel_reports
 
-## Key API Endpoints
-- POST /api/auth/register — Register (callsign + email + password)
-- POST /api/auth/login — Login (email + password)
-- POST /api/auth/logout — Logout (clear cookies)
-- POST /api/auth/forgot-password — Generate reset token
-- POST /api/auth/reset-password — Reset password with token
-- POST /api/auth/onboard — Mark user as onboarded
-- GET /api/admin/users — List all users (admin)
-- POST /api/admin/users/{id}/reset-link — Generate admin reset link
-- GET /api/factions/* — Faction CRUD
-- GET /api/gamemaster/* — GM tools
-- GET /api/world/state — Current world conditions
-- GET /api/economy/resources — Resource list with scarcity
-- WS /api/ws/feed — Real-time stream (stats, events, narrations, world_update, scarcity_update)
-
-## Upcoming Tasks (P1-P2)
-- Interactive territory map with faction overlays
-- AI Diplomat agent for faction negotiation
-- Discord webhook broadcaster for AI narratives
-
-## Backlog (P2-P3)
-- LiveKit voice channels for factions
-- TTS narration (OpenAI/ElevenLabs)
-- Key distribution URLs for player onboarding
-- Mobile responsive polish (further refinement)
+## CORS Configuration
+- Production: https://dead-signal.ca, https://faction-wars-17.preview.emergentagent.com
