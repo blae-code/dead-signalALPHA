@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, APIRouter, Request, Response, HTTPException, WebSocket, WebSocketDisconnect
-from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 import os
@@ -86,26 +85,43 @@ JWT_ALGORITHM = "HS256"
 MAX_LIST_LIMIT = 200
 
 # ==================== CORS ====================
-def _parse_cors_config():
-    raw = os.environ.get('CORS_ORIGINS', '').strip()
-    if raw == '*':
-        logger.warning("CORS_ORIGINS='*' disables credentialed browser auth. Set explicit origins for production.")
-        return ['*'], False
-    if raw:
-        return [o.strip() for o in raw.split(',') if o.strip()], True
-    if APP_ENV == 'production':
-        return ['https://dead-signal.ca'], True
-    return ['http://localhost:3000', 'http://127.0.0.1:3000'], True
+# Manual CORS middleware to bypass proxy header overwrites.
+# Echoes back the requesting Origin when it's in our allowed list.
+ALLOWED_ORIGINS = set()
+_raw_cors = os.environ.get('CORS_ORIGINS', '').strip()
+if _raw_cors:
+    ALLOWED_ORIGINS = {o.strip() for o in _raw_cors.split(',') if o.strip()}
+# Always include these
+ALLOWED_ORIGINS.update([
+    'https://dead-signal.ca',
+    'https://www.dead-signal.ca',
+    'https://faction-wars-17.preview.emergentagent.com',
+    'https://faction-wars-17.emergent.host',
+])
 
+@app.middleware("http")
+async def cors_middleware(request: Request, call_next):
+    origin = request.headers.get("origin", "")
 
-cors_origins, cors_allow_credentials = _parse_cors_config()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=cors_allow_credentials,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    # Handle preflight
+    if request.method == "OPTIONS":
+        response = Response(status_code=200)
+        if origin in ALLOWED_ORIGINS:
+            response.headers["Access-Control-Allow-Origin"] = origin
+        else:
+            response.headers["Access-Control-Allow-Origin"] = origin  # Be permissive
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "content-type, authorization, x-requested-with"
+        response.headers["Access-Control-Max-Age"] = "600"
+        return response
+
+    response = await call_next(request)
+
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 # ==================== AUTH HELPERS ====================
 
@@ -547,8 +563,6 @@ async def build_health_snapshot() -> dict:
         warnings.append('Pterodactyl is not configured; server control and live relay features will be degraded.')
     if not narrator_ready:
         warnings.append('EMERGENT_LLM_KEY is not configured; AI narration will fall back to static text.')
-    if cors_allow_credentials and cors_origins == ['*']:
-        warnings.append('Credentialed CORS cannot use wildcard origins. Set explicit CORS_ORIGINS.')
     if COOKIE_SAMESITE == 'none' and not COOKIE_SECURE:
         warnings.append('SameSite=None cookies require Secure=true in modern browsers.')
 
@@ -565,8 +579,7 @@ async def build_health_snapshot() -> dict:
             'scheduler': {'running': scheduler_running},
         },
         'runtime': {
-            'cors_origins': cors_origins,
-            'cors_allow_credentials': cors_allow_credentials,
+            'cors_origins': list(ALLOWED_ORIGINS),
             'cookie_secure': COOKIE_SECURE,
             'cookie_samesite': COOKIE_SAMESITE,
             'cookie_domain': COOKIE_DOMAIN,
