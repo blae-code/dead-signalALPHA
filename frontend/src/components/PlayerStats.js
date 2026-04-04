@@ -1,187 +1,165 @@
-/**
- * PlayerStats
- * -----------
- * Personal stats panel for a player: K/D, playtime, session history, activity score.
- * Backend: /api/stats/me  (stats.py)
- *
- * TODO:
- *  - Wire up /api/stats/history to render a sparkline using recharts or a simple
- *    CSS bar chart.  The history endpoint returns daily { date, kills, deaths } buckets.
- *  - Add a leaderboard view (tab toggle) that fetches /api/stats/leaderboard and
- *    renders a ranked table with medals for top 3.
- *  - Once sessions are rich (playtime tracked per-session), render a session timeline
- *    as a horizontal bar or calendar heatmap.
- */
-
 import { useState, useEffect, useCallback } from 'react';
 import api from '@/lib/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  Crosshair, Skull, Clock, Activity, TrendingUp, Award,
-  RefreshCw, BarChart2, Calendar,
+  Crosshair, Skull, Clock, TrendingUp, Award, Users, Activity, BarChart3, Calendar,
 } from 'lucide-react';
 
-function StatCard({ icon, label, value, sub, color = 'text-[#c4841d]' }) {
+const HOUR_LABELS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
+
+function StatCard({ icon, label, value, sub, color = '#c4841d' }) {
   return (
-    <div className="border border-[#3a3832] rounded p-3 flex items-center gap-3 bg-[#0d0c0a]">
-      <div className={`${color} shrink-0`}>{icon}</div>
-      <div>
-        <div className={`text-lg font-bold font-mono ${color}`}>{value ?? '—'}</div>
-        <div className="text-[10px] text-[#88837a] uppercase tracking-wider">{label}</div>
-        {sub && <div className="text-[10px] text-[#4a4540]">{sub}</div>}
+    <div className="border border-[#2a2520] bg-[#111111] p-3 panel-hover" data-testid={`stat-${label.replace(/\s+/g, '-').toLowerCase()}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <span style={{ color }}>{icon}</span>
+        <span className="text-[10px] font-heading uppercase tracking-widest text-[#88837a]">{label}</span>
       </div>
+      <p className="font-heading text-2xl text-[#d4cfc4]" style={{ transition: 'color 0.3s' }}>{value}</p>
+      {sub && <p className="text-[10px] font-mono text-[#88837a] mt-0.5">{sub}</p>}
     </div>
   );
 }
 
-function MiniBar({ value, max, color = '#c4841d' }) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
-  return (
-    <div className="h-1.5 bg-[#1a1916] rounded-full overflow-hidden">
-      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
-    </div>
-  );
-}
-
-function ActivityBar({ history }) {
-  if (!history || history.length === 0) {
-    return <p className="text-[#4a4540] text-xs text-center py-4">No activity history yet.</p>;
-  }
-  const maxKills = Math.max(...history.map(d => d.kills || 0), 1);
-
+function LeaderboardTable({ data, valueKey, valueLabel, showKD }) {
+  if (!data?.length) return <p className="text-xs font-mono text-[#88837a] text-center py-4">No data yet</p>;
   return (
     <div className="space-y-1">
-      {history.slice(-14).map((d, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <span className="text-[10px] text-[#4a4540] w-16 shrink-0">
-            {new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+      {data.map((p, i) => (
+        <div key={i} className="flex items-center gap-3 p-2 border border-[#2a2520] bg-[#111111]/50 text-xs font-mono" data-testid={`leaderboard-row-${i}`}>
+          <span className={`w-6 text-center font-bold ${i === 0 ? 'text-[#c4841d]' : i === 1 ? 'text-[#88837a]' : 'text-[#88837a]/60'}`}>
+            #{p.rank}
           </span>
-          <div className="flex-1">
-            <MiniBar value={d.kills || 0} max={maxKills} color="#c4841d" />
-          </div>
-          <span className="text-[10px] text-[#88837a] w-6 text-right">{d.kills || 0}</span>
+          <span className="flex-1 text-[#d4cfc4]">{p.callsign}</span>
+          <span className="text-[#c4841d] font-bold">{p[valueKey]}{valueLabel}</span>
+          {showKD && <span className="text-[#88837a] w-16 text-right">{p.kd_ratio} K/D</span>}
         </div>
       ))}
     </div>
   );
 }
 
-function SessionRow({ session }) {
-  const connected = session.connected_at ? new Date(session.connected_at) : null;
-  const lastSeen  = session.last_seen   ? new Date(session.last_seen)    : null;
-  let duration = '';
-  if (connected && lastSeen) {
-    const mins = Math.round((lastSeen - connected) / 60000);
-    duration = mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
-  }
-
+function ActivityGraph({ history }) {
+  if (!history?.length) return null;
+  const maxEvents = Math.max(...history.map((d) => d.event_count), 1);
   return (
-    <div className="flex items-center justify-between text-[11px] py-1 border-b border-[#1a1916]">
-      <span className="text-[#88837a]">{connected?.toLocaleDateString() || '—'}</span>
-      <span className="text-[#4a4540]">{connected?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-      <span className={`font-mono ${session.online ? 'text-[#6b7a3d]' : 'text-[#4a4540]'}`}>
-        {session.online ? '● ONLINE' : duration || '—'}
-      </span>
+    <div className="border border-[#2a2520] bg-[#111111] p-3 panel-hover" data-testid="activity-graph">
+      <div className="flex items-center gap-2 mb-3">
+        <Calendar className="w-4 h-4 text-[#c4841d]" />
+        <span className="text-[10px] font-heading uppercase tracking-widest text-[#c4841d]">Activity Timeline</span>
+      </div>
+      <div className="flex items-end gap-1 h-20">
+        {history.map((d, i) => (
+          <div key={i} className="flex-1 flex flex-col items-center gap-0.5 group">
+            <div className="relative w-full flex flex-col justify-end" style={{ height: '60px' }}>
+              {d.kills > 0 && (
+                <div
+                  className="w-full bg-[#8b3a3a]/60"
+                  style={{ height: `${Math.max((d.kills / maxEvents) * 60, 2)}px`, transition: 'height 0.5s' }}
+                  title={`${d.kills} kills`}
+                />
+              )}
+              <div
+                className="w-full bg-[#c4841d]/40"
+                style={{ height: `${Math.max((d.event_count / maxEvents) * 60, 2)}px`, transition: 'height 0.5s' }}
+                title={`${d.event_count} events`}
+              />
+            </div>
+            <span className="text-[8px] font-mono text-[#88837a]/40 group-hover:text-[#88837a]" style={{ transition: 'color 0.2s' }}>
+              {d.date.slice(5)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-4 mt-2 justify-center">
+        <span className="flex items-center gap-1 text-[9px] font-mono text-[#88837a]"><span className="w-2 h-2 bg-[#c4841d]/40" /> Events</span>
+        <span className="flex items-center gap-1 text-[9px] font-mono text-[#88837a]"><span className="w-2 h-2 bg-[#8b3a3a]/60" /> Kills</span>
+      </div>
     </div>
   );
 }
 
-export default function PlayerStats({ user }) {
-  const [stats, setStats]     = useState(null);
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [tab, setTab]         = useState('stats');  // stats | history
+export default function PlayerStats() {
+  const [stats, setStats] = useState(null);
+  const [leaderboard, setLeaderboard] = useState(null);
+  const [history, setHistory] = useState(null);
+  const [lbTab, setLbTab] = useState('kills');
+  const [loading, setLoading] = useState(true);
 
-  const fetchStats = useCallback(async () => {
+  const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      const [statsRes, histRes] = await Promise.all([
+      const [s, l, h] = await Promise.all([
         api.get('/stats/me'),
-        api.get('/stats/history').catch(() => ({ data: { history: [] } })),
+        api.get('/stats/leaderboard?limit=10'),
+        api.get('/stats/history?days=14'),
       ]);
-      setStats(statsRes.data);
-      setHistory(histRes.data.history || []);
-    } catch { /* silent */ }
-    finally { setLoading(false); }
+      setStats(s.data);
+      setLeaderboard(l.data);
+      setHistory(h.data);
+    } catch { /* graceful */ }
+    setLoading(false);
   }, []);
 
-  useEffect(() => { fetchStats(); }, [fetchStats]);
+  useEffect(() => { fetch(); }, [fetch]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-6 h-6 border-2 border-[#c4841d] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   const s = stats || {};
-  const kd = s.deaths > 0 ? (s.kills / s.deaths).toFixed(2) : (s.kills || 0);
-  const hours = s.total_playtime_minutes ? Math.floor(s.total_playtime_minutes / 60) : 0;
-  const mins  = s.total_playtime_minutes ? s.total_playtime_minutes % 60 : 0;
 
   return (
-    <div className="h-full flex flex-col gap-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-[#c4841d] tracking-wider uppercase">
-          {user?.callsign || 'My Stats'}
-        </span>
-        <button onClick={fetchStats} className="text-[#88837a] hover:text-[#c9b89a]">
-          <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+    <div className="space-y-4" data-testid="player-stats">
+      {/* Personal Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard icon={<Crosshair className="w-4 h-4" />} label="Kills" value={s.kills ?? 0} color="#8b3a3a" />
+        <StatCard icon={<Skull className="w-4 h-4" />} label="Deaths" value={s.deaths ?? 0} color="#88837a" />
+        <StatCard icon={<TrendingUp className="w-4 h-4" />} label="K/D Ratio" value={s.kd_ratio ?? '0.00'} sub={`Best streak: ${s.best_kill_streak ?? 0}`} />
+        <StatCard icon={<Clock className="w-4 h-4" />} label="Playtime" value={`${s.total_playtime_hours ?? 0}h`} sub={`${s.total_sessions ?? 0} sessions`} />
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-[#3a3832] pb-2">
-        {[
-          { id: 'stats',   label: 'Overview',   icon: <Activity className="w-3 h-3" /> },
-          { id: 'history', label: 'Activity',    icon: <BarChart2 className="w-3 h-3" /> },
-          { id: 'sessions', label: 'Sessions',   icon: <Calendar className="w-3 h-3" /> },
-        ].map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded transition-colors ${
-              tab === t.id
-                ? 'bg-[#c4841d]/10 text-[#c4841d] border border-[#c4841d]/30'
-                : 'text-[#88837a] hover:text-[#c9b89a]'
-            }`}
-          >
-            {t.icon} {t.label}
-          </button>
-        ))}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <StatCard icon={<Activity className="w-4 h-4" />} label="Events Logged" value={s.events_logged ?? 0} />
+        <StatCard icon={<Users className="w-4 h-4" />} label="Faction" value={s.faction_name || 'None'} sub={s.faction_tag ? `[${s.faction_tag}]` : 'Join or create a faction'} />
+        <StatCard
+          icon={<Award className="w-4 h-4" />}
+          label="Most Active"
+          value={s.most_active_hours?.length ? HOUR_LABELS[s.most_active_hours[0].hour] : '--'}
+          sub={s.most_active_hours?.length > 1 ? `Also: ${HOUR_LABELS[s.most_active_hours[1]?.hour]}` : ''}
+        />
       </div>
 
-      <ScrollArea className="flex-1">
-        {tab === 'stats' && (
-          <div className="grid grid-cols-2 gap-2 pr-2">
-            <StatCard icon={<Crosshair className="w-5 h-5" />} label="Kills"      value={s.kills ?? 0} />
-            <StatCard icon={<Skull className="w-5 h-5" />}     label="Deaths"     value={s.deaths ?? 0} color="text-[#8b3a3a]" />
-            <StatCard icon={<TrendingUp className="w-5 h-5" />} label="K/D Ratio" value={kd} />
-            <StatCard icon={<Clock className="w-5 h-5" />}      label="Playtime"  value={`${hours}h ${mins}m`} color="text-[#6b7a3d]" />
-            <StatCard icon={<Activity className="w-5 h-5" />}   label="Sessions"  value={s.session_count ?? 0} />
-            <StatCard
-              icon={<Award className="w-5 h-5" />}
-              label="Activity Score"
-              value={s.activity_score ?? 0}
-              sub="Engagement metric"
-              color="text-[#7a3d6b]"
-            />
-          </div>
-        )}
+      {/* Activity Graph */}
+      <ActivityGraph history={history?.history} />
 
-        {tab === 'history' && (
-          <div className="pr-2 space-y-2">
-            <p className="text-[10px] text-[#4a4540] uppercase tracking-widest">Kills per day (last 14 days)</p>
-            <ActivityBar history={history} />
+      {/* Leaderboard */}
+      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg" data-testid="leaderboard">
+        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-[#c4841d]" />
+            <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Leaderboard</h3>
           </div>
-        )}
-
-        {tab === 'sessions' && (
-          <div className="pr-2 space-y-1">
-            <p className="text-[10px] text-[#4a4540] uppercase tracking-widest mb-2">Recent sessions</p>
-            {(s.recent_sessions || []).length === 0 && (
-              <p className="text-[#4a4540] text-xs text-center py-4">No session data yet.</p>
-            )}
-            {(s.recent_sessions || []).map((sess, i) => (
-              <SessionRow key={i} session={sess} />
+          <div className="flex gap-1">
+            {['kills', 'playtime', 'kd'].map((t) => (
+              <button key={t} onClick={() => setLbTab(t)} data-testid={`lb-tab-${t}`}
+                className={`text-[10px] font-mono uppercase border px-2 py-0.5 transition-all ${lbTab === t ? 'border-[#c4841d] text-[#c4841d] bg-[#c4841d]/10' : 'border-[#2a2520] text-[#88837a] hover:text-[#d4cfc4]'}`}>
+                {t}
+              </button>
             ))}
           </div>
-        )}
-      </ScrollArea>
+        </div>
+        <ScrollArea className="h-[300px]">
+          <div className="p-3">
+            {lbTab === 'kills' && <LeaderboardTable data={leaderboard?.by_kills} valueKey="kill_count" valueLabel=" kills" showKD />}
+            {lbTab === 'playtime' && <LeaderboardTable data={leaderboard?.by_playtime} valueKey="total_playtime_hours" valueLabel="h" />}
+            {lbTab === 'kd' && <LeaderboardTable data={leaderboard?.by_kd} valueKey="kd_ratio" valueLabel=" K/D" showKD={false} />}
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   );
 }

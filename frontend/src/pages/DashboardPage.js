@@ -13,13 +13,15 @@ import PlayerRoster from '@/components/PlayerRoster';
 import KeyManagement from '@/components/KeyManagement';
 import FactionPanel from '@/components/FactionPanel';
 import GameMasterPanel from '@/components/GameMasterPanel';
+import PlayerStats from '@/components/PlayerStats';
 import ResourceHub from '@/components/ResourceHub';
 import WeatherOverlay from '@/components/WeatherOverlay';
 import LiveStatusBar from '@/components/LiveStatusBar';
+import PushNotificationSetup from '@/components/PushNotificationSetup';
 import { useServerWebSocket } from '@/hooks/useServerWebSocket';
 import {
   Radio, Activity, Terminal, Map, Shield, LogOut, User, ChevronDown, Users, Wifi, WifiOff,
-  Swords, Crosshair, Package, Menu, X, Clock, CalendarDays,
+  Swords, Crosshair, Package, Menu, X, Clock, CalendarDays, BarChart3, Bell,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -138,12 +140,14 @@ export default function DashboardPage({ user: propUser, onLogout }) {
 
   const TAB_LIST = [
     { id: 'overview', label: 'Overview', icon: <Activity className="w-3 h-3" /> },
+    { id: 'stats', label: 'My Stats', icon: <BarChart3 className="w-3 h-3" /> },
     { id: 'intel', label: 'Intel', icon: <Radio className="w-3 h-3" /> },
     { id: 'console', label: 'Console', icon: <Terminal className="w-3 h-3" /> },
     { id: 'map', label: 'Tactical Map', icon: <Map className="w-3 h-3" /> },
     { id: 'players', label: 'Players', icon: <Users className="w-3 h-3" /> },
     { id: 'factions', label: 'Factions', icon: <Swords className="w-3 h-3" /> },
     { id: 'economy', label: 'Economy', icon: <Package className="w-3 h-3" /> },
+    { id: 'alerts', label: 'Alerts', icon: <Bell className="w-3 h-3" /> },
     ...(isAdmin ? [{ id: 'gm', label: 'Game Master', icon: <Crosshair className="w-3 h-3" /> }] : []),
     ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: <Shield className="w-3 h-3" /> }] : []),
   ];
@@ -316,6 +320,14 @@ export default function DashboardPage({ user: propUser, onLogout }) {
 
           <TabsContent value="intel" className="mt-0">
             <IntelBoard liveIntel={liveIntel} liveWorldState={worldState} liveScarcity={scarcityData} />
+          </TabsContent>
+
+          <TabsContent value="stats" className="mt-0">
+            <PlayerStats />
+          </TabsContent>
+
+          <TabsContent value="alerts" className="mt-0">
+            <PushNotificationSetup />
           </TabsContent>
 
           <TabsContent value="console" className="mt-0">

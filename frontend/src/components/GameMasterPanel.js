@@ -9,6 +9,10 @@ import {
 } from 'lucide-react';
 import NPCPanel from '@/components/NPCPanel';
 import MissionPanel from '@/components/MissionPanel';
+import WorldEventComposer from '@/components/WorldEventComposer';
+import FactionBalanceOverview from '@/components/FactionBalanceOverview';
+import StoryArcScheduler from '@/components/StoryArcScheduler';
+import PlayerAnalytics from '@/components/PlayerAnalytics';
 
 const ACTION_ICONS = {
   restart: <RotateCcw className="w-3 h-3" />,
@@ -38,15 +42,19 @@ export default function GameMasterPanel() {
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
   const tabs = [
-    { id: 'overview',  label: 'GM Overview',  icon: <Settings className="w-3 h-3" /> },
-    { id: 'npcs',      label: 'NPCs',          icon: <User className="w-3 h-3" /> },
-    { id: 'missions',  label: 'Missions',      icon: <Target className="w-3 h-3" /> },
-    { id: 'scheduler', label: 'Scheduler',     icon: <Clock className="w-3 h-3" /> },
-    { id: 'broadcast', label: 'Broadcasts',    icon: <MessageSquare className="w-3 h-3" /> },
-    { id: 'players',   label: 'Player Admin',  icon: <Users className="w-3 h-3" /> },
-    { id: 'triggers',  label: 'Triggers',      icon: <Zap className="w-3 h-3" /> },
-    { id: 'commands',  label: 'Quick Cmds',    icon: <Terminal className="w-3 h-3" /> },
-    { id: 'log',       label: 'Action Log',    icon: <FileText className="w-3 h-3" /> },
+    { id: 'overview',    label: 'GM Overview',     icon: <Settings className="w-3 h-3" /> },
+    { id: 'world-event', label: 'World Events',    icon: <Zap className="w-3 h-3" /> },
+    { id: 'story-arcs',  label: 'Story Arcs',      icon: <FileText className="w-3 h-3" /> },
+    { id: 'faction-bal', label: 'Factions',         icon: <Shield className="w-3 h-3" /> },
+    { id: 'analytics',   label: 'Analytics',        icon: <Eye className="w-3 h-3" /> },
+    { id: 'npcs',        label: 'NPCs',             icon: <User className="w-3 h-3" /> },
+    { id: 'missions',    label: 'Missions',         icon: <Target className="w-3 h-3" /> },
+    { id: 'scheduler',   label: 'Scheduler',        icon: <Clock className="w-3 h-3" /> },
+    { id: 'broadcast',   label: 'Broadcasts',       icon: <MessageSquare className="w-3 h-3" /> },
+    { id: 'players',     label: 'Player Admin',     icon: <Users className="w-3 h-3" /> },
+    { id: 'triggers',    label: 'Triggers',          icon: <Zap className="w-3 h-3" /> },
+    { id: 'commands',    label: 'Quick Cmds',        icon: <Terminal className="w-3 h-3" /> },
+    { id: 'log',         label: 'Action Log',        icon: <FileText className="w-3 h-3" /> },
   ];
 
   return (
@@ -69,15 +77,19 @@ export default function GameMasterPanel() {
         ))}
       </div>
 
-      {tab === 'overview'  && <GMOverview stats={stats} onRefresh={fetchStats} />}
-      {tab === 'npcs'      && <NPCPanel />}
-      {tab === 'missions'  && <MissionPanel />}
-      {tab === 'scheduler' && <SchedulerPanel />}
-      {tab === 'broadcast' && <BroadcastPanel />}
-      {tab === 'players'   && <PlayerAdminPanel />}
-      {tab === 'triggers'  && <TriggersPanel />}
-      {tab === 'commands'  && <QuickCommandsPanel />}
-      {tab === 'log'       && <ActionLogPanel />}
+      {tab === 'overview'    && <GMOverview stats={stats} onRefresh={fetchStats} />}
+      {tab === 'world-event' && <WorldEventComposer />}
+      {tab === 'story-arcs'  && <StoryArcScheduler />}
+      {tab === 'faction-bal' && <FactionBalanceOverview />}
+      {tab === 'analytics'   && <PlayerAnalytics />}
+      {tab === 'npcs'        && <NPCPanel />}
+      {tab === 'missions'    && <MissionPanel />}
+      {tab === 'scheduler'   && <SchedulerPanel />}
+      {tab === 'broadcast'   && <BroadcastPanel />}
+      {tab === 'players'     && <PlayerAdminPanel />}
+      {tab === 'triggers'    && <TriggersPanel />}
+      {tab === 'commands'    && <QuickCommandsPanel />}
+      {tab === 'log'         && <ActionLogPanel />}
     </div>
   );
 }

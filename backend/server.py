@@ -29,6 +29,11 @@ from routes.npcs import init_npc_routes
 from routes.missions import init_mission_routes
 from routes.inventory import init_inventory_routes
 from routes.ocr import init_ocr_routes
+from routes.stats import init_stats_routes
+from routes.analytics import init_analytics_routes
+from routes.world_events import init_world_events_routes
+from routes.story_arcs import init_story_arc_routes
+from routes.notifications import init_notification_routes
 from scheduler import Scheduler
 
 # Logging
@@ -1070,3 +1075,23 @@ app.include_router(inventory_router)
 # OCR screenshot scan route
 ocr_router = init_ocr_routes(db, get_current_user)
 app.include_router(ocr_router)
+
+# Player stats routes
+stats_router = init_stats_routes(db, get_current_user)
+app.include_router(stats_router)
+
+# GM Analytics routes
+analytics_router = init_analytics_routes(db, require_server_admin)
+app.include_router(analytics_router)
+
+# GM World Event Composer routes
+world_events_router = init_world_events_routes(db, get_current_user, require_server_admin, ptero, ws_manager)
+app.include_router(world_events_router)
+
+# GM Story Arc routes
+story_arcs_router = init_story_arc_routes(db, require_server_admin, ws_manager)
+app.include_router(story_arcs_router)
+
+# Push Notification routes
+notification_router = init_notification_routes(db, get_current_user)
+app.include_router(notification_router)
