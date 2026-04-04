@@ -86,6 +86,5 @@
     "postcss": "^8.4.49",
     "react-scripts": "5.0.1",
     "tailwindcss": "^3.4.17"
-  },
-  "packageManager": "npm@11.6.1"
+  }
 }

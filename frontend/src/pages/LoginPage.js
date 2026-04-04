@@ -1,125 +1,202 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
-import { useAuth } from '@/App';
-import { formatError } from '@/lib/api';
-import { Radio, Eye, EyeOff, Key } from 'lucide-react';
+import { Radio, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import api from '@/lib/api';
 
-export default function LoginPage() {
-  const { user, login } = useAuth();
+export default function LoginPage({ onAuth }) {
+  const [mode, setMode] = useState('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [callsign, setCallsign] = useState('');
-  const [authKey, setAuthKey] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showKey, setShowKey] = useState(false);
-
-  if (user) return <Navigate to="/" replace />;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+
     try {
-      await login(callsign, authKey);
+      if (mode === 'register') {
+        if (!callsign.trim() || callsign.trim().length < 2) {
+          setError('Callsign must be at least 2 characters');
+          setLoading(false);
+          return;
+        }
+        if (password.length < 6) {
+          setError('Password must be at least 6 characters');
+          setLoading(false);
+          return;
+        }
+        const { data } = await api.post('/auth/register', {
+          callsign: callsign.trim(),
+          email: email.trim(),
+          password,
+        });
+        onAuth(data.user);
+      } else {
+        const { data } = await api.post('/auth/login', {
+          email: email.trim(),
+          password,
+        });
+        onAuth(data.user);
+      }
     } catch (err) {
-      setError(formatError(err.response?.data?.detail) || err.message);
+      const msg = err?.response?.data?.detail || 'Authentication failed';
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="login-bg flex items-center justify-center p-4" data-testid="login-page">
-      <div className="noise-bg fixed inset-0 pointer-events-none" />
+    <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 noise-bg">
+      {/* Scanline overlay */}
+      <div className="pointer-events-none fixed inset-0 z-50" style={{
+        background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px)',
+      }} />
 
-      <div className="relative z-10 w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-3">
-            <Radio className="w-8 h-8 text-[#c4841d] glow-amber" />
-            <h1 className="font-heading text-5xl font-bold uppercase tracking-[0.2em] text-[#c4841d] glow-amber-text">
-              Dead Signal
-            </h1>
-          </div>
-          <p className="font-mono text-xs text-[#88837a] tracking-widest uppercase">
-            Survival Command Terminal v1.0
-          </p>
-          <div className="mt-2 h-px bg-gradient-to-r from-transparent via-[#2a2520] to-transparent" />
+      {/* Logo / Header */}
+      <div className="text-center mb-8 relative" data-testid="auth-header">
+        <div className="flex items-center justify-center gap-3 mb-3">
+          <Radio className="w-6 h-6 text-[#c4841d] animate-pulse" />
+          <h1 className="font-heading text-4xl sm:text-5xl uppercase tracking-[0.3em] text-[#c4841d]" style={{
+            textShadow: '0 0 20px rgba(196,132,29,0.3)',
+          }}>
+            Dead Signal
+          </h1>
         </div>
+        <p className="text-xs font-mono uppercase tracking-[0.4em] text-[#88837a]">
+          AI-Narrated Companion // HumanitZ Operations
+        </p>
+        <div className="mt-4 h-px bg-gradient-to-r from-transparent via-[#c4841d]/40 to-transparent" />
+      </div>
 
-        {/* Auth Card */}
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-4">
-            <div className="flex items-center gap-2">
-              <Key className="w-4 h-4 text-[#c4841d]" />
-              <span className="font-heading text-sm uppercase tracking-widest font-bold text-[#c4841d]">
-                Authenticate
-              </span>
-            </div>
+      {/* Auth Card */}
+      <div className="w-full max-w-md" data-testid="auth-card">
+        <div className="border border-[#2a2520] bg-[#111111]/95 panel-inset">
+          {/* Mode tabs */}
+          <div className="flex border-b border-[#2a2520]">
+            <button
+              data-testid="auth-tab-login"
+              onClick={() => { setMode('login'); setError(''); }}
+              className={`flex-1 py-3 text-xs font-heading uppercase tracking-[0.3em] transition-all ${
+                mode === 'login'
+                  ? 'text-[#c4841d] bg-[#c4841d]/5 border-b-2 border-[#c4841d]'
+                  : 'text-[#88837a] hover:text-[#d4cfc4]'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              data-testid="auth-tab-register"
+              onClick={() => { setMode('register'); setError(''); }}
+              className={`flex-1 py-3 text-xs font-heading uppercase tracking-[0.3em] transition-all ${
+                mode === 'register'
+                  ? 'text-[#c4841d] bg-[#c4841d]/5 border-b-2 border-[#c4841d]'
+                  : 'text-[#88837a] hover:text-[#d4cfc4]'
+              }`}
+            >
+              Register
+            </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6 space-y-5">
-            {error && (
-              <div data-testid="auth-error" className="border border-[#8b3a3a] bg-[#8b3a3a]/10 p-3 text-xs font-mono text-[#a94442]">
-                [ERROR] {error}
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {/* Callsign (register only) */}
+            {mode === 'register' && (
+              <div>
+                <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">
+                  Callsign
+                </label>
+                <input
+                  data-testid="auth-callsign"
+                  type="text"
+                  value={callsign}
+                  onChange={(e) => setCallsign(e.target.value)}
+                  placeholder="Your operator name"
+                  className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all"
+                  required
+                />
+                <p className="mt-1 text-[9px] font-mono text-[#88837a]/60">
+                  Your public identity in the wasteland
+                </p>
               </div>
             )}
 
+            {/* Email */}
             <div>
-              <label className="block text-xs font-mono uppercase tracking-[0.2em] text-[#88837a] mb-2">
-                Callsign
+              <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">
+                Email
               </label>
               <input
-                data-testid="callsign-input"
-                type="text"
-                value={callsign}
-                onChange={(e) => setCallsign(e.target.value)}
+                data-testid="auth-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="operator@example.com"
+                className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all"
                 required
-                placeholder="Enter your callsign..."
-                autoComplete="username"
-                className="w-full bg-[#111111] border border-[#2a2520] p-3 text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:ring-1 focus:ring-[#c4841d] focus:outline-none transition-colors"
               />
             </div>
 
+            {/* Password */}
             <div>
-              <label className="block text-xs font-mono uppercase tracking-[0.2em] text-[#88837a] mb-2">
-                Auth Key
+              <label className="block text-[10px] font-heading uppercase tracking-[0.3em] text-[#88837a] mb-1.5">
+                Password
               </label>
               <div className="relative">
                 <input
-                  data-testid="authkey-input"
-                  type={showKey ? 'text' : 'password'}
-                  value={authKey}
-                  onChange={(e) => setAuthKey(e.target.value)}
+                  data-testid="auth-password"
+                  type={showPw ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={mode === 'register' ? 'Min 6 characters' : 'Enter password'}
+                  className="w-full px-3 py-2.5 bg-[#0a0a0a] border border-[#2a2520] text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none focus:ring-1 focus:ring-[#c4841d]/30 transition-all pr-10"
                   required
-                  placeholder="DS-XXXX-XXXX-XXXX-XXXX"
-                  autoComplete="current-password"
-                  className="w-full bg-[#111111] border border-[#2a2520] p-3 pr-10 text-sm font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:ring-1 focus:ring-[#c4841d] focus:outline-none transition-colors tracking-widest"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#88837a] hover:text-[#c4841d] transition-colors"
+                  onClick={() => setShowPw(!showPw)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#88837a] hover:text-[#c4841d] transition-colors"
+                  data-testid="auth-toggle-password"
                 >
-                  {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
+            {/* Error */}
+            {error && (
+              <div className="flex items-center gap-2 p-2.5 border border-[#8b3a3a]/60 bg-[#8b3a3a]/10" data-testid="auth-error">
+                <AlertTriangle className="w-4 h-4 text-[#8b3a3a] shrink-0" />
+                <span className="text-xs font-mono text-[#d4cfc4]">{error}</span>
+              </div>
+            )}
+
+            {/* Submit */}
             <button
-              data-testid="auth-submit-button"
               type="submit"
               disabled={loading}
-              className="w-full border border-[#c4841d] bg-[#c4841d]/10 text-[#c4841d] font-heading text-sm uppercase tracking-widest font-bold p-3 hover:bg-[#c4841d] hover:text-[#111111] hover:shadow-[0_0_15px_rgba(196,132,29,0.5)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              data-testid="auth-submit"
+              className="w-full py-3 bg-[#c4841d] hover:bg-[#e8b84d] text-[#0a0a0a] font-heading text-sm uppercase tracking-[0.3em] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Transmitting...' : 'Authenticate'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-[#0a0a0a] border-t-transparent rounded-full animate-spin" />
+                  {mode === 'register' ? 'Registering...' : 'Authenticating...'}
+                </span>
+              ) : (
+                mode === 'register' ? 'Create Account' : 'Sign In'
+              )}
             </button>
           </form>
+        </div>
 
-          <div className="border-t border-[#2a2520] p-3 text-center">
-            <span className="text-xs font-mono text-[#88837a]">
-              No key? Contact your system admin for access.
-            </span>
-          </div>
+        {/* Footer */}
+        <div className="mt-4 text-center">
+          <p className="text-[10px] font-mono text-[#88837a]/60">
+            Secure connection // End-to-end encrypted
+          </p>
         </div>
       </div>
     </div>

@@ -22,8 +22,10 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-export default function DashboardPage() {
-  const { user, logout } = useAuth();
+export default function DashboardPage({ user: propUser, onLogout }) {
+  const authCtx = useAuth();
+  const user = propUser || authCtx?.user;
+  const logout = onLogout || authCtx?.logout;
   const {
     liveStats,
     serverState,

@@ -4,8 +4,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Package, Archive, Home, Hammer, Plus, X, Edit3, Trash2, RefreshCw,
   MapPin, Eye, EyeOff, ChevronRight, ChevronDown, ChevronUp,
-  AlertTriangle, CheckCircle, Shield, Boxes,
+  AlertTriangle, CheckCircle, Shield, Boxes, Scan,
 } from 'lucide-react';
+import OcrScanModal from '@/components/OcrScanModal';
 
 // ---------------------------------------------------------------------------
 // Shared resource list (mirrors backend constants)
@@ -101,6 +102,7 @@ function MyItemsPanel() {
   const [saving, setSaving] = useState(false);
   const [filterCat, setFilterCat] = useState('');
   const [msg, setMsg] = useState('');
+  const [showOcr, setShowOcr] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,6 +162,13 @@ function MyItemsPanel() {
         </select>
         <button onClick={load} className="text-[#88837a] hover:text-[#c4841d] p-1"><RefreshCw className="w-3.5 h-3.5" /></button>
         <div className="flex-1" />
+        <button
+          onClick={() => setShowOcr(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-heading uppercase tracking-widest border border-[#3a6b8b] text-[#3a6b8b] hover:bg-[#3a6b8b]/10 transition-all"
+          title="Scan a screenshot to auto-fill inventory"
+        >
+          <Scan className="w-3 h-3" /> Scan
+        </button>
         {!editing ? (
           <button onClick={startEdit}
             className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-heading uppercase tracking-widest border border-[#c4841d] text-[#c4841d] hover:bg-[#c4841d]/10 transition-all">
@@ -223,6 +232,18 @@ function MyItemsPanel() {
             ))}
           </div>
         </ScrollArea>
+      )}
+
+      {showOcr && (
+        <OcrScanModal
+          onClose={() => setShowOcr(false)}
+          onApplyInventory={async (items) => {
+            await api.patch('/inventory/items', { items });
+            setMsg(`Merged ${items.length} item type(s) from scan.`);
+            await load();
+          }}
+          onApplyCrafting={() => {}}
+        />
       )}
     </div>
   );
@@ -784,6 +805,7 @@ function CraftingPanel() {
   const [saving, setSaving] = useState(false);
   const [showAddRecipe, setShowAddRecipe] = useState(false);
   const [newRecipe, setNewRecipe] = useState({ recipe_name: RECIPE_NAMES[0], quantity: 1 });
+  const [showOcr, setShowOcr] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -828,7 +850,10 @@ function CraftingPanel() {
       <div className="border border-[#2a2520] bg-[#1a1a1a]/95 p-3">
         <div className="flex items-center justify-between mb-3">
           <p className="text-[9px] font-heading uppercase tracking-widest text-[#c4841d]">Crafting Queue</p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <button onClick={() => setShowOcr(true)} className="flex items-center gap-1 text-[10px] font-mono text-[#3a6b8b] hover:text-[#5a9bbf] transition-colors" title="Scan screenshot to import crafting queue">
+              <Scan className="w-3 h-3" /> Scan
+            </button>
             <button onClick={() => setShowAddRecipe(v => !v)} className="flex items-center gap-1 text-[10px] font-mono text-[#88837a] hover:text-[#c4841d] transition-colors">
               <Plus className="w-3 h-3" /> Add
             </button>
@@ -952,6 +977,22 @@ function CraftingPanel() {
           </ScrollArea>
         )}
       </div>
+
+      {showOcr && (
+        <OcrScanModal
+          onClose={() => setShowOcr(false)}
+          onApplyInventory={() => {}}
+          onApplyCrafting={async (items) => {
+            const updated = [...queue];
+            for (const ocr of items) {
+              const idx = updated.findIndex(q => q.recipe_name === ocr.recipe_name);
+              if (idx >= 0) updated[idx] = { ...updated[idx], quantity: updated[idx].quantity + ocr.quantity };
+              else updated.push({ recipe_name: ocr.recipe_name, quantity: ocr.quantity });
+            }
+            await saveQueue(updated);
+          }}
+        />
+      )}
     </div>
   );
 }

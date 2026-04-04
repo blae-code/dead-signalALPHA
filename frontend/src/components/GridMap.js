@@ -22,7 +22,7 @@ export default function GridMap() {
           <Crosshair className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Tactical Map</h3>
         </div>
-        <span className="text-[10px] font-mono text-[#88837a]">PLACEHOLDER // FMODEL EXTRACTION PENDING</span>
+        <span className="text-[10px] font-mono text-[#88837a]">STATIC PREVIEW</span>
       </div>
 
       <div className="p-4">
@@ -98,7 +98,7 @@ export default function GridMap() {
         </div>
 
         <p className="mt-3 text-[10px] font-mono text-[#88837a] text-center">
-          Map data pending FModel game asset extraction. Showing placeholder tactical grid.
+          Live map integration coming soon. Showing static tactical reference grid.
         </p>
       </div>
     </div>

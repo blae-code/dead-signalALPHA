@@ -1,99 +1,87 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import '@/App.css';
+import { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import api from '@/lib/api';
 import LoginPage from '@/pages/LoginPage';
-import SetupPage from '@/pages/SetupPage';
 import DashboardPage from '@/pages/DashboardPage';
-import CRTOverlay from '@/components/CRTOverlay';
+import OnboardingFlow from '@/components/OnboardingFlow';
 
 const AuthContext = createContext(null);
-
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export const useAuth = () => useContext(AuthContext);
 
 function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);       // null = checking
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [setupRequired, setSetupRequired] = useState(null); // null = checking, true/false
 
   const checkAuth = useCallback(async () => {
     try {
       const { data } = await api.get('/auth/me');
       setUser(data);
     } catch {
-      setUser(false);
+      setUser(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const checkSetup = useCallback(async () => {
-    try {
-      const { data } = await api.get('/auth/setup-status');
-      setSetupRequired(data.setup_required);
-    } catch {
-      setSetupRequired(false);
-    }
-  }, []);
+  useEffect(() => { checkAuth(); }, [checkAuth]);
 
-  useEffect(() => {
-    checkAuth();
-    checkSetup();
-  }, [checkAuth, checkSetup]);
-
-  const login = async (callsign, authKey) => {
-    const { data } = await api.post('/auth/login', { callsign, auth_key: authKey });
-    setUser(data);
-    return data;
+  const login = (userData) => {
+    setUser(userData);
   };
 
   const logout = async () => {
-    await api.post('/auth/logout');
-    setUser(false);
+    try {
+      await api.post('/auth/logout');
+    } catch { /* ignore */ }
+    setUser(null);
+  };
+
+  const completeOnboarding = () => {
+    setUser((prev) => prev ? { ...prev, onboarded: true } : prev);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, setupRequired, login, logout, checkAuth, checkSetup }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, completeOnboarding }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-function ProtectedRoute({ children }) {
-  const { user, loading, setupRequired } = useAuth();
-  if (loading || setupRequired === null) {
+function AppRoutes() {
+  const { user, loading, login, logout, completeOnboarding } = useAuth();
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-[#111111] flex items-center justify-center">
-        <div className="font-heading text-2xl uppercase tracking-widest text-[#c4841d] glow-amber-text">
-          Establishing Signal...
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center noise-bg">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-[#c4841d] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-xs font-mono uppercase tracking-widest text-[#88837a]">Establishing connection...</p>
         </div>
       </div>
     );
   }
-  if (setupRequired) return <Navigate to="/setup" replace />;
-  if (user === false) return <Navigate to="/login" replace />;
-  return children;
+
+  if (!user) {
+    return <LoginPage onAuth={login} />;
+  }
+
+  if (!user.onboarded) {
+    return <OnboardingFlow user={user} onComplete={completeOnboarding} />;
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={<DashboardPage user={user} onLogout={logout} />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
 }
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <CRTOverlay />
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/setup" element={<SetupPage />} />
-          <Route
-            path="/*"
-            element={
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
+        <AppRoutes />
       </AuthProvider>
     </BrowserRouter>
   );

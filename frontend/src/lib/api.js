@@ -17,7 +17,10 @@ api.interceptors.response.use(
         await axios.post(`${API_ROOT}/auth/refresh`, {}, { withCredentials: true });
         return api(err.config);
       } catch {
-        // Refresh failed, user needs to re-login
+        // Refresh failed — redirect to login
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(err);
