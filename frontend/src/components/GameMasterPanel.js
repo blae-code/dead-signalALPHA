@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '@/lib/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useMetaOptions } from '@/hooks/useMetaOptions';
 import {
   Zap, Clock, MessageSquare, Shield, Users, Terminal, AlertTriangle,
   Play, Pause, Trash2, RefreshCw, Plus, Send, Eye, X, ChevronRight,
@@ -705,7 +706,14 @@ function TriggersPanel() {
         <div className="p-3 space-y-2">
           <p className="text-[10px] font-mono text-[#88837a] mb-2">Triggers auto-execute when specific game events occur. Use {'{player}'} in messages to insert the player name.</p>
           {triggers.length === 0 ? (
-            <p className="text-xs font-mono text-[#88837a]/60 text-center py-8">No event triggers configured</p>
+            <div className="text-center py-8 border border-dashed border-[#2a2520] mx-1">
+              <Zap className="w-8 h-8 text-[#2a2520] mx-auto mb-3" />
+              <p className="text-xs font-mono text-[#88837a]/60 mb-3">No event triggers configured.</p>
+              <p className="text-[10px] font-mono text-[#88837a]/40 max-w-xs mx-auto mb-3">Triggers auto-fire actions when game events occur — like welcoming players or announcing hordes.</p>
+              <button onClick={() => setShowCreate(true)} className="text-[10px] font-mono border border-dashed border-[#88837a]/40 text-[#88837a] px-3 py-1 hover:border-[#c4841d] hover:text-[#c4841d] transition-all">
+                <Plus className="w-3 h-3 inline mr-1" />Create Your First Trigger
+              </button>
+            </div>
           ) : triggers.map((t, i) => (
             <div key={i} className={`border p-3 bg-[#111111]/50 ${t.enabled ? 'border-[#2a2520]' : 'border-[#2a2520]/50 opacity-50'}`}>
               <div className="flex items-center justify-between">
@@ -762,21 +770,15 @@ function CreateTriggerForm({ onDone }) {
   const [resources, setResources] = useState([]);
   const [cooldown, setCooldown] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const { options } = useMetaOptions();
 
   useEffect(() => {
-    let active = true;
-    Promise.all([
-      api.get('/missions'),
-      api.get('/npcs'),
-      api.get('/economy/resources'),
-    ]).then(([missionsRes, npcsRes, resourcesRes]) => {
-      if (!active) return;
-      setMissions(missionsRes.data || []);
-      setNpcs(npcsRes.data || []);
-      setResources(resourcesRes.data || []);
-    }).catch(() => {});
-    return () => { active = false; };
-  }, []);
+    if (options) {
+      setMissions(options.missions || []);
+      setNpcs(options.npcs || []);
+      setResources((options.resources || []).map(r => ({ name: r })));
+    }
+  }, [options]);
 
   const presets = [
     { name: 'Welcome Message', event: 'player_connect', action: 'broadcast', params: { message: 'Welcome {player} to Lonely Island!' }, cooldown: 5 },
@@ -995,7 +997,10 @@ function CreateTriggerForm({ onDone }) {
           </div>
           <div>
             <label className="text-[10px] font-mono uppercase tracking-widest text-[#88837a] block mb-1">Spawn Location Override</label>
-            <input value={npcLocation} onChange={(e) => setNpcLocation(e.target.value)} className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none" placeholder="Leave blank to use the NPC record location" />
+            <input value={npcLocation} onChange={(e) => setNpcLocation(e.target.value)} list="trigger-location-list" className="w-full bg-[#111111] border border-[#2a2520] text-[#d4cfc4] font-mono text-xs p-2 focus:border-[#c4841d] focus:outline-none" placeholder="Leave blank to use the NPC record location" />
+            <datalist id="trigger-location-list">
+              {(options?.territory_locations || []).map((t, i) => <option key={i} value={t.label}>{t.grid_ref} — {t.label}</option>)}
+            </datalist>
           </div>
         </>
       )}
@@ -1095,7 +1100,11 @@ function QuickCommandsPanel() {
         <ScrollArea className="h-[300px]">
           <div className="p-3 space-y-2">
             {commands.length === 0 ? (
-              <p className="text-xs font-mono text-[#88837a]/60 text-center py-8">No saved commands</p>
+              <div className="text-center py-8 border border-dashed border-[#2a2520] mx-1">
+                <Terminal className="w-8 h-8 text-[#2a2520] mx-auto mb-3" />
+                <p className="text-xs font-mono text-[#88837a]/60 mb-2">No saved commands.</p>
+                <p className="text-[10px] font-mono text-[#88837a]/40 max-w-xs mx-auto">Save your most-used RCON commands for quick one-click access during gameplay.</p>
+              </div>
             ) : commands.map((c, i) => (
               <div key={i} className="flex items-center justify-between p-2 border border-[#2a2520] bg-[#111111]/50">
                 <div>
@@ -1148,7 +1157,11 @@ function ActionLogPanel() {
       <ScrollArea className="h-[500px]">
         <div className="p-2 space-y-1">
           {log.length === 0 ? (
-            <p className="text-xs font-mono text-[#88837a]/60 text-center py-8">No actions logged</p>
+            <div className="text-center py-8 border border-dashed border-[#2a2520] mx-1">
+              <FileText className="w-8 h-8 text-[#2a2520] mx-auto mb-3" />
+              <p className="text-xs font-mono text-[#88837a]/60 mb-2">No actions logged yet.</p>
+              <p className="text-[10px] font-mono text-[#88837a]/40 max-w-xs mx-auto">Actions will appear here as you manage the server — broadcasts, triggers, commands, and more.</p>
+            </div>
           ) : log.map((entry, i) => (
             <div key={i} className="flex items-start gap-2 p-2 border-l-2 border-[#2a2520] bg-[#111111]/50 text-[10px] font-mono hover:bg-[#111111] transition-colors">
               <span className="text-[#88837a] whitespace-nowrap">{new Date(entry.timestamp).toLocaleString()}</span>

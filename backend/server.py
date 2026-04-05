@@ -38,6 +38,7 @@ from routes.territories import init_territory_routes
 from routes.profile import init_profile_routes
 from routes.loot_intel import init_loot_intel_routes
 from routes.planner import init_planner_routes
+from routes.meta import init_meta_routes
 from diplomat_ai import DiplomatAI
 from scheduler import Scheduler
 
@@ -993,12 +994,14 @@ def validate_runtime_config():
 async def startup():
     validate_runtime_config()
     # Create indexes for email-based auth
-    try:
-        await db.users.drop_index('callsign_1')
-    except Exception:
-        pass
-    await db.users.create_index('email', unique=True)
-    await db.users.create_index('callsign', unique=True)
+    # Drop stale indexes that may conflict, then recreate safely
+    for idx_name in ['callsign_1', 'email_1']:
+        try:
+            await db.users.drop_index(idx_name)
+        except Exception:
+            pass
+    await db.users.create_index('email', unique=True, sparse=True)
+    await db.users.create_index('callsign', unique=True, sparse=True)
     await db.login_attempts.create_index('identifier')
     await db.password_resets.create_index('token', unique=True)
     await db.password_resets.create_index('expires_at')
@@ -1183,3 +1186,7 @@ app.include_router(loot_intel_router)
 # Base Planner routes
 planner_router = init_planner_routes(db, get_current_user)
 app.include_router(planner_router)
+
+# Meta Options routes
+meta_router = init_meta_routes(db, get_current_user)
+app.include_router(meta_router)

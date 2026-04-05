@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api, { formatError } from '@/lib/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useMetaOptions } from '@/hooks/useMetaOptions';
 import {
   Target, Plus, Trash2, RefreshCw, ChevronRight, X, Edit3,
   CheckCircle, Circle, Flag, Users, Clock, Gift, AlertTriangle,
@@ -36,6 +37,30 @@ const EMPTY_MISSION = {
   stages: [], rewards: [], assigned_players: [], assigned_faction: '',
   linked_npc_id: '', deadline_hours: 0, broadcast_on_activate: true, gm_notes: '',
 };
+
+const MISSION_PRESETS = [
+  {
+    label: 'Supply Run',
+    data: { title: 'Emergency Supply Run', mission_type: 'supply_run', difficulty: 'medium', summary: 'A forward outpost is running critically low on supplies. Scavenge the nearby town and return before nightfall.',
+      stages: [{ stage_id: 's_1', title: 'Reach the Town', description: 'Navigate to the designated scavenging zone.', objectives: [{ objective_id: 'o_1', description: 'Arrive at the town perimeter', objective_type: 'reach_location', target: '', quantity: 1, optional: false, completed: false }], completed: false, order: 0 },
+        { stage_id: 's_2', title: 'Scavenge Supplies', description: 'Collect the required resources.', objectives: [{ objective_id: 'o_2', description: 'Collect Canned Food', objective_type: 'collect', target: 'Canned Food', quantity: 5, optional: false, completed: false }, { objective_id: 'o_3', description: 'Collect Water Bottles', objective_type: 'collect', target: 'Water Bottle', quantity: 3, optional: false, completed: false }, { objective_id: 'o_4', description: 'Find Antibiotics', objective_type: 'collect', target: 'Antibiotics', quantity: 1, optional: true, completed: false }], completed: false, order: 1 }],
+      rewards: [{ reward_type: 'item', description: 'Backpack upgrade', quantity: 1, faction_name: '' }] },
+  },
+  {
+    label: 'Bounty Hunt',
+    data: { title: 'Hostile Elimination', mission_type: 'bounty', difficulty: 'hard', summary: 'A hostile survivor has been raiding faction supply routes. Locate and neutralize the threat.',
+      stages: [{ stage_id: 's_1', title: 'Gather Intel', description: 'Find evidence of the raider\'s last known position.', objectives: [{ objective_id: 'o_1', description: 'Talk to the informant NPC', objective_type: 'talk_to_npc', target: '', quantity: 1, optional: false, completed: false }], completed: false, order: 0 },
+        { stage_id: 's_2', title: 'Engage Target', description: 'Find and eliminate the hostile.', objectives: [{ objective_id: 'o_2', description: 'Eliminate the raider', objective_type: 'kill', target: 'Raider', quantity: 1, optional: false, completed: false }], completed: false, order: 1 }],
+      rewards: [{ reward_type: 'faction_rep', description: '+50 Faction Standing', quantity: 1, faction_name: '' }] },
+  },
+  {
+    label: 'Defense Mission',
+    data: { title: 'Base Defense', mission_type: 'defend', difficulty: 'hard', summary: 'Intelligence suggests a horde is inbound. Fortify the base and survive the night.',
+      stages: [{ stage_id: 's_1', title: 'Fortify', description: 'Prepare defenses before the assault.', objectives: [{ objective_id: 'o_1', description: 'Build 3 barricades', objective_type: 'craft', target: 'Wooden Barricade', quantity: 3, optional: false, completed: false }], completed: false, order: 0 },
+        { stage_id: 's_2', title: 'Survive', description: 'Hold the line until dawn.', objectives: [{ objective_id: 'o_2', description: 'Survive the horde wave', objective_type: 'survive', target: '', quantity: 1, optional: false, completed: false }], completed: false, order: 1 }],
+      rewards: [{ reward_type: 'narrative_unlock', description: 'Unlock "Fortress" story arc', quantity: 1, faction_name: '' }] },
+  },
+];
 
 export default function MissionPanel() {
   const [missions, setMissions] = useState([]);
@@ -84,12 +109,13 @@ export default function MissionPanel() {
   const statusOrder = ['active', 'paused', 'draft', 'completed', 'failed', 'cancelled'];
 
   return (
-    <div>
+    <div data-testid="mission-panel">
       {/* Summary bar */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
         {statusOrder.map(s => (
           <button
             key={s}
+            data-testid={`mission-filter-${s}`}
             onClick={() => setFilterStatus(filterStatus === s ? '' : s)}
             className={`flex-shrink-0 border px-3 py-2 text-center transition-all ${
               filterStatus === s ? STATUS_STYLES[s] : 'border-[#2a2520] text-[#88837a] hover:border-[#88837a]'
@@ -106,10 +132,11 @@ export default function MissionPanel() {
         <select
           value={filterType}
           onChange={e => setFilterType(e.target.value)}
+          data-testid="mission-type-filter"
           className="bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1 font-mono"
         >
           <option value="">All Types</option>
-          {MISSION_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+          {MISSION_TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
         </select>
         <button onClick={load} className="text-[#88837a] hover:text-[#c4841d] p-1 transition-colors">
           <RefreshCw className="w-3.5 h-3.5" />
@@ -117,6 +144,7 @@ export default function MissionPanel() {
         <div className="flex-1" />
         <button
           onClick={() => setShowCreate(true)}
+          data-testid="create-mission-button"
           className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-heading uppercase tracking-widest border border-[#c4841d] text-[#c4841d] hover:bg-[#c4841d]/10 transition-all"
         >
           <Plus className="w-3 h-3" /> New Mission
@@ -128,9 +156,18 @@ export default function MissionPanel() {
       {loading ? (
         <p className="text-[#88837a] text-xs font-mono text-center py-8">Loading...</p>
       ) : missions.length === 0 ? (
-        <div className="border border-dashed border-[#2a2520] p-8 text-center">
-          <Target className="w-8 h-8 text-[#2a2520] mx-auto mb-2" />
-          <p className="text-[#88837a] text-xs font-mono">No missions found. Create the first mission to give players purpose.</p>
+        <div className="border border-dashed border-[#2a2520] p-8 text-center" data-testid="missions-empty-state">
+          <Target className="w-8 h-8 text-[#2a2520] mx-auto mb-3" />
+          <p className="text-[#88837a] text-xs font-mono mb-4">No missions found. Give your players purpose.</p>
+          <div className="flex flex-wrap gap-2 justify-center">
+            <button onClick={() => setShowCreate(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-heading uppercase tracking-widest border border-[#c4841d] text-[#c4841d] hover:bg-[#c4841d]/10 transition-all">
+              <Plus className="w-3 h-3" /> Create from Scratch
+            </button>
+            {MISSION_PRESETS.map((p, i) => (
+              <PresetButton key={i} label={p.label} onClick={() => setShowCreate(true)} />
+            ))}
+          </div>
         </div>
       ) : (
         <ScrollArea className="h-[400px]">
@@ -145,8 +182,17 @@ export default function MissionPanel() {
   );
 }
 
+function PresetButton({ label, onClick }) {
+  return (
+    <button onClick={onClick}
+      className="text-[10px] font-mono border border-dashed border-[#88837a]/40 text-[#88837a] px-2 py-1 hover:border-[#c4841d] hover:text-[#c4841d] transition-all">
+      {label}
+    </button>
+  );
+}
 
-function MissionRow({ mission, onClick, onStatusChange }) {
+
+function MissionRow({ mission, onClick }) {
   const typeColor = TYPE_COLORS[mission.mission_type] || '#88837a';
   const diffColor = DIFF_COLORS[mission.difficulty] || '#88837a';
   const totalObjectives = (mission.stages || []).reduce((acc, s) => acc + (s.objectives?.length || 0), 0);
@@ -157,6 +203,7 @@ function MissionRow({ mission, onClick, onStatusChange }) {
   return (
     <div
       onClick={onClick}
+      data-testid={`mission-row-${mission.mission_id}`}
       className="flex items-center gap-3 p-3 border border-[#2a2520] bg-[#1a1a1a]/95 hover:border-[#88837a] cursor-pointer transition-all group"
     >
       <div className="w-8 h-8 border flex items-center justify-center flex-shrink-0" style={{ borderColor: typeColor }}>
@@ -166,7 +213,7 @@ function MissionRow({ mission, onClick, onStatusChange }) {
         <p className="text-[#d4cfc4] text-sm font-heading truncate">{mission.title}</p>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: typeColor }}>
-            {mission.mission_type.replace('_', ' ')}
+            {mission.mission_type.replace(/_/g, ' ')}
           </span>
           <span className="text-[#2a2520]">·</span>
           <span className="text-[10px] font-mono" style={{ color: diffColor }}>{mission.difficulty}</span>
@@ -269,10 +316,10 @@ function MissionDetail({ mission, onBack }) {
   const canDelete = ['draft', 'cancelled'].includes(data.status);
 
   return (
-    <div>
+    <div data-testid="mission-detail">
       {/* Header */}
       <div className="flex items-start gap-3 mb-4">
-        <button onClick={onBack} className="text-[#88837a] hover:text-[#c4841d] transition-colors mt-0.5">
+        <button onClick={onBack} data-testid="mission-detail-back" className="text-[#88837a] hover:text-[#c4841d] transition-colors mt-0.5">
           <X className="w-4 h-4" />
         </button>
         <div className="w-8 h-8 border flex items-center justify-center flex-shrink-0 mt-0.5" style={{ borderColor: typeColor }}>
@@ -281,7 +328,7 @@ function MissionDetail({ mission, onBack }) {
         <div className="flex-1 min-w-0">
           <h3 className="font-heading text-sm text-[#d4cfc4] uppercase tracking-widest leading-tight">{data.title}</h3>
           <p className="text-[10px] font-mono text-[#88837a] mt-0.5">
-            <span style={{ color: typeColor }}>{data.mission_type.replace('_', ' ')}</span>
+            <span style={{ color: typeColor }}>{data.mission_type.replace(/_/g, ' ')}</span>
             {' · '}
             <span style={{ color: diffColor }}>{data.difficulty}</span>
           </p>
@@ -289,11 +336,11 @@ function MissionDetail({ mission, onBack }) {
         <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 border flex-shrink-0 ${STATUS_STYLES[data.status] || ''}`}>
           {data.status}
         </span>
-        <button onClick={() => setEditing(true)} className="text-[#88837a] hover:text-[#c4841d] p-1 transition-colors">
+        <button onClick={() => setEditing(true)} data-testid="mission-edit-btn" className="text-[#88837a] hover:text-[#c4841d] p-1 transition-colors">
           <Edit3 className="w-3.5 h-3.5" />
         </button>
         {canDelete && (
-          <button onClick={deleteMission} className="text-[#88837a] hover:text-[#8b3a3a] p-1 transition-colors">
+          <button onClick={deleteMission} data-testid="mission-delete-btn" className="text-[#88837a] hover:text-[#8b3a3a] p-1 transition-colors">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         )}
@@ -307,7 +354,7 @@ function MissionDetail({ mission, onBack }) {
         <div className="space-y-3 pr-1">
           {/* Summary */}
           <Section title="Mission Briefing">
-            <p className="text-[11px] font-mono text-[#88837a] leading-relaxed">{data.summary}</p>
+            <p className="text-[11px] font-mono text-[#88837a] leading-relaxed">{data.summary || <span className="italic text-[#3a3530]">No briefing provided.</span>}</p>
             <div className="flex flex-wrap gap-4 mt-2 text-[10px] font-mono">
               {data.assigned_faction && (
                 <span className="text-[#7a3d6b]">Faction: {data.assigned_faction}</span>
@@ -317,6 +364,9 @@ function MissionDetail({ mission, onBack }) {
               )}
               {data.deadline_hours > 0 && (
                 <span className="text-[#c4841d]">Deadline: {data.deadline_hours}h</span>
+              )}
+              {data.linked_npc_id && (
+                <span className="text-[#6b7a3d]">NPC: {data.linked_npc_id}</span>
               )}
             </div>
           </Section>
@@ -350,7 +400,7 @@ function MissionDetail({ mission, onBack }) {
             <Section title={`Stages (${data.stages.length})`}>
               <div className="space-y-2">
                 {data.stages.map((stage, si) => {
-                  const expanded = expandedStages[stage.stage_id] !== false; // default open
+                  const expanded = expandedStages[stage.stage_id] !== false;
                   const reqDone = stage.objectives.filter(o => !o.optional && o.completed).length;
                   const reqTotal = stage.objectives.filter(o => !o.optional).length;
                   return (
@@ -387,7 +437,7 @@ function MissionDetail({ mission, onBack }) {
                               <span className={`text-[10px] font-mono leading-relaxed ${obj.completed ? 'line-through text-[#88837a]' : 'text-[#d4cfc4]'}`}>
                                 {obj.description}
                                 {obj.target && <span className="text-[#c4841d]"> — {obj.target}</span>}
-                                {obj.quantity > 1 && <span className="text-[#88837a]"> ×{obj.quantity}</span>}
+                                {obj.quantity > 1 && <span className="text-[#88837a]"> x{obj.quantity}</span>}
                               </span>
                               {obj.optional && (
                                 <span className="ml-auto text-[9px] font-mono text-[#88837a] flex-shrink-0">optional</span>
@@ -411,10 +461,10 @@ function MissionDetail({ mission, onBack }) {
                   <div key={i} className="flex items-center gap-2 border border-[#2a2520] px-2 py-1.5 text-[11px] font-mono">
                     <Gift className="w-3 h-3 text-[#c4841d] flex-shrink-0" />
                     <span className="text-[9px] font-heading uppercase tracking-widest text-[#88837a] w-20 flex-shrink-0">
-                      {r.reward_type.replace('_', ' ')}
+                      {r.reward_type.replace(/_/g, ' ')}
                     </span>
                     <span className="text-[#d4cfc4] flex-1">{r.description}</span>
-                    {r.quantity > 1 && <span className="text-[#88837a]">×{r.quantity}</span>}
+                    {r.quantity > 1 && <span className="text-[#88837a]">x{r.quantity}</span>}
                     {r.faction_name && <span className="text-[#7a3d6b]">[{r.faction_name}]</span>}
                   </div>
                 ))}
@@ -436,10 +486,15 @@ function MissionDetail({ mission, onBack }) {
 
 
 function MissionForm({ initial, missionId, onSave, onCancel }) {
+  const { options } = useMetaOptions();
   const [form, setForm] = useState({ ...initial });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [activeStageIdx, setActiveStageIdx] = useState(null);
+
+  const factions = options?.factions || [];
+  const npcs = options?.npcs || [];
+  const callsigns = options?.callsigns || [];
 
   // ---- Stage helpers ----
   const addStage = () => {
@@ -513,16 +568,23 @@ function MissionForm({ initial, missionId, onSave, onCancel }) {
   };
   const removeReward = (i) => setForm(f => ({ ...f, rewards: f.rewards.filter((_, idx) => idx !== i) }));
 
-  // ---- Players ----
+  // ---- Players (dropdown-based) ----
   const [playerInput, setPlayerInput] = useState('');
-  const addPlayer = () => {
-    const p = playerInput.trim();
+  const addPlayer = (val) => {
+    const p = (val || playerInput).trim();
     if (!p || form.assigned_players.includes(p)) return;
     setForm(f => ({ ...f, assigned_players: [...f.assigned_players, p] }));
     setPlayerInput('');
   };
 
+  // ---- Presets ----
+  const applyPreset = (preset) => {
+    setForm(f => ({ ...f, ...preset.data, assigned_players: f.assigned_players, assigned_faction: f.assigned_faction }));
+  };
+
   const save = async () => {
+    if (!form.title.trim()) { setError('Mission title is required'); return; }
+    if (!form.summary.trim()) { setError('Mission briefing is required'); return; }
     setSaving(true);
     setError('');
     try {
@@ -545,9 +607,9 @@ function MissionForm({ initial, missionId, onSave, onCancel }) {
   const setField = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
   return (
-    <div>
+    <div data-testid="mission-form">
       <div className="flex items-center gap-3 mb-4">
-        <button onClick={onCancel} className="text-[#88837a] hover:text-[#c4841d] transition-colors">
+        <button onClick={onCancel} data-testid="mission-form-cancel" className="text-[#88837a] hover:text-[#c4841d] transition-colors">
           <X className="w-4 h-4" />
         </button>
         <h3 className="font-heading text-sm text-[#c4841d] uppercase tracking-widest">
@@ -555,24 +617,44 @@ function MissionForm({ initial, missionId, onSave, onCancel }) {
         </h3>
       </div>
 
-      <ScrollArea className="h-[460px]">
+      {/* Presets (only on create) */}
+      {!missionId && (
+        <div className="mb-4">
+          <p className="text-[9px] font-heading uppercase tracking-widest text-[#88837a] mb-1.5">Quick Start Templates</p>
+          <div className="flex gap-2 flex-wrap">
+            {MISSION_PRESETS.map((p, i) => (
+              <button key={i} onClick={() => applyPreset(p)}
+                data-testid={`mission-preset-${i}`}
+                className="text-[10px] font-mono border border-dashed border-[#88837a]/40 text-[#88837a] px-2.5 py-1 hover:border-[#c4841d] hover:text-[#c4841d] transition-all">
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <ScrollArea className="h-[420px]">
         <div className="space-y-4 pr-1">
           {/* Core */}
           <Section title="Mission Identity">
             <div className="space-y-2">
               <FormField label="Title *">
                 <input value={form.title} onChange={e => setField('title', e.target.value)}
-                  className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono focus:outline-none focus:border-[#c4841d]" />
+                  data-testid="mission-title-input"
+                  placeholder="e.g. Operation Nightfall"
+                  className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono focus:outline-none focus:border-[#c4841d] placeholder-[#3a3530]" />
               </FormField>
               <div className="grid grid-cols-2 gap-3">
                 <FormField label="Type">
                   <select value={form.mission_type} onChange={e => setField('mission_type', e.target.value)}
+                    data-testid="mission-type-select"
                     className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono">
-                    {MISSION_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+                    {MISSION_TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
                   </select>
                 </FormField>
                 <FormField label="Difficulty">
                   <select value={form.difficulty} onChange={e => setField('difficulty', e.target.value)}
+                    data-testid="mission-difficulty-select"
                     className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono">
                     {DIFFICULTY_LEVELS.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
@@ -580,28 +662,36 @@ function MissionForm({ initial, missionId, onSave, onCancel }) {
               </div>
               <FormField label="Summary / Briefing *">
                 <textarea value={form.summary} onChange={e => setField('summary', e.target.value)} rows={3}
-                  className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono resize-none focus:outline-none focus:border-[#c4841d]" />
+                  data-testid="mission-summary-input"
+                  placeholder="Describe the mission objective and context..."
+                  className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono resize-none focus:outline-none focus:border-[#c4841d] placeholder-[#3a3530]" />
               </FormField>
             </div>
           </Section>
 
-          {/* Assignment */}
+          {/* Assignment — GUIDED CONTROLS */}
           <Section title="Assignment">
             <div className="space-y-2">
               <FormField label="Assigned Faction">
-                <input value={form.assigned_faction} onChange={e => setField('assigned_faction', e.target.value)}
-                  placeholder="Faction name (optional)"
-                  className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono focus:outline-none focus:border-[#c4841d]" />
+                <select value={form.assigned_faction} onChange={e => setField('assigned_faction', e.target.value)}
+                  data-testid="mission-faction-select"
+                  className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono">
+                  <option value="">No faction (open to all)</option>
+                  {factions.map(f => (
+                    <option key={f.faction_id} value={f.name}>[{f.tag}] {f.name}</option>
+                  ))}
+                </select>
               </FormField>
               <FormField label="Assigned Players">
                 <div className="flex gap-2 mb-1">
-                  <input value={playerInput} onChange={e => setPlayerInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addPlayer()}
-                    placeholder="Player callsign..."
-                    className="flex-1 bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1 font-mono focus:outline-none focus:border-[#c4841d]" />
-                  <button onClick={addPlayer} className="px-2 border border-[#2a2520] text-[#88837a] hover:border-[#c4841d] hover:text-[#c4841d]">
-                    <Plus className="w-3 h-3" />
-                  </button>
+                  <select value={playerInput} onChange={e => { setPlayerInput(e.target.value); if (e.target.value) addPlayer(e.target.value); }}
+                    data-testid="mission-player-select"
+                    className="flex-1 bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1 font-mono">
+                    <option value="">Add player...</option>
+                    {callsigns.filter(c => !form.assigned_players.includes(c)).map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {form.assigned_players.map(p => (
@@ -618,12 +708,18 @@ function MissionForm({ initial, missionId, onSave, onCancel }) {
                 <FormField label="Deadline (hours, 0=none)">
                   <input type="number" min="0" max="8760" value={form.deadline_hours}
                     onChange={e => setField('deadline_hours', e.target.value)}
+                    data-testid="mission-deadline-input"
                     className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono" />
                 </FormField>
-                <FormField label="Linked NPC ID">
-                  <input value={form.linked_npc_id} onChange={e => setField('linked_npc_id', e.target.value)}
-                    placeholder="NPC quest-giver ID"
-                    className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono focus:outline-none focus:border-[#c4841d]" />
+                <FormField label="Linked NPC (quest-giver)">
+                  <select value={form.linked_npc_id} onChange={e => setField('linked_npc_id', e.target.value)}
+                    data-testid="mission-npc-select"
+                    className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono">
+                    <option value="">None</option>
+                    {npcs.map(n => (
+                      <option key={n.npc_id} value={n.npc_id}>{n.name} ({n.role.replace(/_/g, ' ')})</option>
+                    ))}
+                  </select>
                 </FormField>
               </div>
               <div className="flex items-center gap-2">
@@ -644,6 +740,9 @@ function MissionForm({ initial, missionId, onSave, onCancel }) {
 
           {/* Stages */}
           <Section title="Stages & Objectives">
+            {form.stages.length === 0 && (
+              <p className="text-[10px] font-mono text-[#88837a]/60 mb-2">No stages yet. Add a stage to define mission objectives.</p>
+            )}
             <div className="space-y-2 mb-2">
               {form.stages.map((stage, si) => (
                 <div key={stage.stage_id} className="border border-[#2a2520]">
@@ -676,7 +775,7 @@ function MissionForm({ initial, missionId, onSave, onCancel }) {
                               className="bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[10px] px-1.5 py-1 font-mono focus:outline-none focus:border-[#c4841d]" />
                             <select value={obj.objective_type} onChange={e => updateObjective(si, oi, 'objective_type', e.target.value)}
                               className="bg-[#111] border border-[#2a2520] text-[#88837a] text-[10px] px-1 py-1 font-mono">
-                              {OBJECTIVE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                              {OBJECTIVE_TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
                             </select>
                             <input type="number" min="1" value={obj.quantity}
                               onChange={e => updateObjective(si, oi, 'quantity', parseInt(e.target.value) || 1)}
@@ -708,6 +807,9 @@ function MissionForm({ initial, missionId, onSave, onCancel }) {
 
           {/* Rewards */}
           <Section title="Rewards">
+            {form.rewards.length === 0 && (
+              <p className="text-[10px] font-mono text-[#88837a]/60 mb-2">No rewards yet. Add rewards to incentivize completion.</p>
+            )}
             <div className="space-y-1 mb-2">
               {form.rewards.map((r, i) => (
                 <div key={i} className="flex items-center gap-2 border border-[#2a2520] px-2 py-1 text-[11px] font-mono">
@@ -722,33 +824,42 @@ function MissionForm({ initial, missionId, onSave, onCancel }) {
             <div className="flex gap-2">
               <select value={newReward.reward_type} onChange={e => setNewReward(v => ({ ...v, reward_type: e.target.value }))}
                 className="bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1 font-mono">
-                {REWARD_TYPES.map(t => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+                {REWARD_TYPES.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
               </select>
               <input placeholder="Reward description" value={newReward.description}
                 onChange={e => setNewReward(v => ({ ...v, description: e.target.value }))}
                 onKeyDown={e => e.key === 'Enter' && addReward()}
-                className="flex-1 bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1 font-mono focus:outline-none focus:border-[#c4841d]" />
+                className="flex-1 bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1 font-mono focus:outline-none focus:border-[#c4841d] placeholder-[#3a3530]" />
               <button onClick={addReward} className="px-2 border border-[#2a2520] text-[#88837a] hover:border-[#c4841d] hover:text-[#c4841d]">
                 <Plus className="w-3 h-3" />
               </button>
             </div>
+            {newReward.reward_type === 'faction_rep' && factions.length > 0 && (
+              <select value={newReward.faction_name} onChange={e => setNewReward(v => ({ ...v, faction_name: e.target.value }))}
+                className="mt-1 bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1 font-mono w-full">
+                <option value="">Select faction for rep reward...</option>
+                {factions.map(f => <option key={f.faction_id} value={f.name}>{f.name}</option>)}
+              </select>
+            )}
           </Section>
 
           {/* GM Notes */}
           <Section title="GM Notes (internal, hidden from players)">
             <textarea value={form.gm_notes} onChange={e => setField('gm_notes', e.target.value)} rows={3}
-              className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono resize-none focus:outline-none focus:border-[#c4841d]" />
+              placeholder="Internal notes about this mission..."
+              className="w-full bg-[#111] border border-[#2a2520] text-[#d4cfc4] text-[11px] px-2 py-1.5 font-mono resize-none focus:outline-none focus:border-[#c4841d] placeholder-[#3a3530]" />
           </Section>
         </div>
       </ScrollArea>
 
-      {error && <p className="text-[#8b3a3a] text-xs font-mono mt-2">{error}</p>}
+      {error && <p className="text-[#8b3a3a] text-xs font-mono mt-2" data-testid="mission-form-error">{error}</p>}
 
       <div className="flex gap-2 mt-3">
         <button onClick={onCancel} className="flex-1 py-2 text-[10px] font-heading uppercase tracking-widest border border-[#2a2520] text-[#88837a] hover:border-[#88837a] transition-all">
           Cancel
         </button>
         <button onClick={save} disabled={saving}
+          data-testid="mission-form-submit"
           className="flex-1 py-2 text-[10px] font-heading uppercase tracking-widest border border-[#c4841d] text-[#c4841d] hover:bg-[#c4841d]/10 transition-all disabled:opacity-50">
           {saving ? 'Saving...' : missionId ? 'Save Changes' : 'Create Mission (Draft)'}
         </button>

@@ -124,9 +124,13 @@ function TradeBoard({ user }) {
         <ScrollArea className="h-[450px]">
           <div className="p-3 space-y-2">
             {trades.length === 0 ? (
-              <div className="text-center py-8">
-                <ArrowRightLeft className="w-8 h-8 text-[#88837a] mx-auto mb-3 opacity-30" />
-                <p className="text-xs font-mono text-[#88837a]/60">No active trades. Post one to get started.</p>
+              <div className="text-center py-8 border border-dashed border-[#2a2520] mx-1" data-testid="trades-empty-state">
+                <ArrowRightLeft className="w-8 h-8 text-[#2a2520] mx-auto mb-3" />
+                <p className="text-xs font-mono text-[#88837a]/60 mb-3">No active trades on the board.</p>
+                <button onClick={() => setShowCreate(true)}
+                  className="text-[10px] font-mono border border-dashed border-[#88837a]/40 text-[#88837a] px-3 py-1 hover:border-[#c4841d] hover:text-[#c4841d] transition-all">
+                  <Plus className="w-3 h-3 inline mr-1" /> Post the First Trade
+                </button>
               </div>
             ) : trades.map((t, i) => (
               <div key={i} data-testid={`trade-card-${i}`} className="border border-[#2a2520] bg-[#111111]/50 p-3 hover:border-[#c4841d]/30 transition-colors">
@@ -321,7 +325,15 @@ function SupplyBoard({ user }) {
       <ScrollArea className="h-[400px]">
         <div className="p-3 space-y-2">
           {requests.length === 0 ? (
-            <p className="text-xs font-mono text-[#88837a]/60 text-center py-8">No open supply requests</p>
+            <div className="text-center py-8 border border-dashed border-[#2a2520] mx-1">
+              <Send className="w-8 h-8 text-[#2a2520] mx-auto mb-3" />
+              <p className="text-xs font-mono text-[#88837a]/60 mb-3">No open supply requests.</p>
+              <p className="text-[10px] font-mono text-[#88837a]/40 max-w-xs mx-auto mb-3">Request resources your settlement needs, and other players can volunteer to help.</p>
+              <button onClick={() => setShowCreate(true)}
+                className="text-[10px] font-mono border border-dashed border-[#88837a]/40 text-[#88837a] px-3 py-1 hover:border-[#c4841d] hover:text-[#c4841d] transition-all">
+                <Plus className="w-3 h-3 inline mr-1" /> Request Supplies
+              </button>
+            </div>
           ) : requests.map((r, i) => (
             <div key={i} className={`border p-3 bg-[#111111]/50 ${PRIORITY_COLORS[r.priority] || 'border-[#2a2520]'}`}>
               <div className="flex items-center justify-between mb-1">

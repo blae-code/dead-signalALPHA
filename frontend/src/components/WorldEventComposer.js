@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Zap, Send, Loader2, Clock, AlertTriangle } from 'lucide-react';
+import { useMetaOptions } from '@/hooks/useMetaOptions';
+import { Zap, Send, Loader2, Clock, AlertTriangle, MapPin } from 'lucide-react';
 
 const TEMPLATES = [
   { type: 'horde', label: 'Horde Attack', icon: '!!', rcon: 'horde spawn', narrative: 'An unnatural silence fell over the settlement. Then, the moaning began. A horde approaches from the {direction}.' },
@@ -12,6 +13,7 @@ const TEMPLATES = [
 ];
 
 export default function WorldEventComposer() {
+  const { options } = useMetaOptions();
   const [templates, setTemplates] = useState([]);
   const [template, setTemplate] = useState('custom');
   const [label, setLabel] = useState('');
@@ -23,6 +25,8 @@ export default function WorldEventComposer() {
   const [firing, setFiring] = useState(false);
   const [result, setResult] = useState(null);
   const [recentEvents, setRecentEvents] = useState([]);
+
+  const territories = options?.territory_locations || [];
 
   useEffect(() => {
     api.get('/gm/world-events/templates').then(({ data }) => setTemplates(data || [])).catch(() => {});
@@ -106,16 +110,22 @@ export default function WorldEventComposer() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            {/* Location */}
+            {/* Location — dropdown + free text fallback */}
             <div>
-              <label className="block text-[10px] font-heading uppercase tracking-widest text-[#88837a] mb-1.5">Location</label>
+              <label className="block text-[10px] font-heading uppercase tracking-widest text-[#88837a] mb-1.5">
+                <MapPin className="w-3 h-3 inline mr-1" />Location
+              </label>
               <input
                 data-testid="event-location"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                placeholder="Grid reference or area"
+                list="event-location-list"
+                placeholder="Grid reference or area name"
                 className="w-full px-3 py-2 bg-[#0a0a0a] border border-[#2a2520] text-xs font-mono text-[#d4cfc4] placeholder-[#88837a]/50 focus:border-[#c4841d] focus:outline-none transition-all"
               />
+              <datalist id="event-location-list">
+                {territories.map((t, i) => <option key={i} value={`${t.grid_ref} — ${t.label}`} />)}
+              </datalist>
             </div>
             {/* Intensity */}
             <div>
