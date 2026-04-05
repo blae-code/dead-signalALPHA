@@ -185,7 +185,7 @@ export default function LoginPage({ onAuth }) {
 
       {/* Auth Card */}
       <div className={`w-full max-w-md relative z-10 transition-all duration-700 delay-300 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`} data-testid="auth-card">
-        <div className="border border-[#2a2520] bg-[#111111]/95 backdrop-blur-sm shadow-2xl shadow-black/40">
+        <div className="ds-panel backdrop-blur-sm shadow-2xl shadow-black/40 glow-amber-soft">
 
           {/* ─── Inline Reset Form ─── */}
           {mode === 'reset-inline' && (

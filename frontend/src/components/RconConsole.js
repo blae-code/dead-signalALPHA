@@ -46,8 +46,8 @@ export default function RconConsole({ isAdmin, consoleLogs = [], serverOffline =
   };
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg" data-testid="rcon-console-panel">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+    <div className="ds-panel panel-inset noise-bg" data-testid="rcon-console-panel">
+      <div className="ds-panel-header flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Terminal className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Command Terminal</h3>

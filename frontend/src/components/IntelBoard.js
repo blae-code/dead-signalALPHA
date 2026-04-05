@@ -73,8 +73,8 @@ export default function IntelBoard({ liveIntel = [], liveWorldState, liveScarcit
 
   return (
     <div className="space-y-4" data-testid="intel-board">
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center justify-between">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Radio className="w-4 h-4 text-[#c4841d]" />
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Intel Board</h3>
@@ -120,8 +120,8 @@ export default function IntelBoard({ liveIntel = [], liveWorldState, liveScarcit
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:col-span-2 border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+        <div className="xl:col-span-2 ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header">
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Live Intel Feed</h3>
           </div>
           <ScrollArea className="h-[560px]">
@@ -256,8 +256,8 @@ function SignalCard({ icon, label, value, subtext, color }) {
 
 function IntelSection({ title, icon, children }) {
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center gap-2">
+    <div className="ds-panel panel-inset noise-bg">
+      <div className="ds-panel-header flex items-center gap-2">
         {icon}
         <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">{title}</h3>
       </div>

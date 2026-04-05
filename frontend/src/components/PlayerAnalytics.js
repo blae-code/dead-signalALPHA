@@ -85,8 +85,8 @@ export default function PlayerAnalytics() {
       </div>
 
       {/* Player Table */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center justify-between">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-[#c4841d]" />
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Player Behaviour Analytics</h3>

@@ -74,8 +74,8 @@ export default function WorldEventComposer() {
 
   return (
     <div className="space-y-4" data-testid="world-event-composer">
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center gap-2">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header flex items-center gap-2">
           <Zap className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">World Event Composer</h3>
         </div>
@@ -202,8 +202,8 @@ export default function WorldEventComposer() {
 
       {/* Saved Templates */}
       {templates.length > 0 && (
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center gap-2">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header flex items-center gap-2">
             <Clock className="w-4 h-4 text-[#88837a]" />
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#88837a]">Saved Templates ({templates.length})</h3>
           </div>
@@ -235,8 +235,8 @@ export default function WorldEventComposer() {
 
       {/* Recent Fired Events */}
       {recentEvents.length > 0 && (
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center gap-2">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header flex items-center gap-2">
             <Zap className="w-4 h-4 text-[#88837a]" />
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#88837a]">Fired This Session</h3>
           </div>

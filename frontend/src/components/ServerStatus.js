@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import api from '@/lib/api';
 import {
-  Cpu, HardDrive, MemoryStick, Power, RotateCcw, Square, Zap, RefreshCw, WifiOff, Users,
+  Cpu, HardDrive, MemoryStick, Power, RotateCcw, Square, Zap, WifiOff, Users,
 } from 'lucide-react';
 
 export default function ServerStatus({ data, liveStats, liveState, onRefresh, isAdmin, onlineCount, onlinePlayers = [], onlineIdentities = {} }) {
@@ -12,7 +12,6 @@ export default function ServerStatus({ data, liveStats, liveState, onRefresh, is
   const hasError = data?.resources?.error || data?.details?.error;
   const noData = !data && !liveStats;
 
-  // Prefer live stats from WebSocket, fallback to polled data
   const cpu = liveStats?.cpu_absolute ?? res?.resources?.cpu_absolute ?? 0;
   const memBytes = liveStats?.memory_bytes ?? res?.resources?.memory_bytes ?? 0;
   const diskBytes = liveStats?.disk_bytes ?? res?.resources?.disk_bytes ?? 0;
@@ -27,85 +26,68 @@ export default function ServerStatus({ data, liveStats, liveState, onRefresh, is
     try {
       await api.post('/server/power', { signal });
       setTimeout(onRefresh, 3000);
-    } catch { /* graceful */ }
+    } catch {}
     setPowerLoading('');
   };
 
   const formatBytes = (bytes) => {
-    if (bytes == null || bytes === 0) return '0 MB';
+    if (bytes == null || bytes === 0) return '0';
     if (bytes > 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
     if (bytes > 1048576) return `${(bytes / 1048576).toFixed(0)} MB`;
     return `${(bytes / 1024).toFixed(0)} KB`;
   };
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg h-full" data-testid="server-status-panel">
-      {/* Header */}
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${
-            isRunning ? 'bg-[#6b7a3d] pulse-green'
-              : isStarting ? 'bg-[#c4841d] pulse-amber'
-              : isOffline ? 'bg-[#8b3a3a]'
-              : hasError ? 'bg-[#8b3a3a]'
-              : 'bg-[#88837a]'
-          }`} />
-          <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Server Status</h3>
-        </div>
-        <button
-          data-testid="refresh-status-button"
-          onClick={onRefresh}
-          className="text-[#88837a] hover:text-[#c4841d] transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-        </button>
+    <div className="ds-panel panel-inset noise-bg h-full" data-testid="server-status-panel">
+      <div className="ds-panel-header">
+        <div className={`w-2 h-2 rounded-full ${
+          isRunning ? 'bg-[#6b7a3d] pulse-green'
+            : isStarting ? 'bg-[#c4841d] pulse-amber'
+            : isOffline ? 'bg-[#8b3a3a]'
+            : hasError ? 'bg-[#8b3a3a]'
+            : 'bg-[#88837a]'
+        }`} />
+        <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d] flex-1">Server Status</h3>
+        <span className="text-[9px] font-mono text-[#88837a]/40 tracking-widest">SYS.01</span>
       </div>
 
-      <div className="p-4 space-y-4">
-        {/* Connection error state */}
+      <div className="ds-panel-body ds-grid-bg">
         {hasError && !liveStats ? (
-          <div className="text-xs font-mono space-y-2">
+          <div className="text-xs font-mono space-y-2 relative z-10">
             <div className="flex items-center gap-2 text-[#a94442]">
               <WifiOff className="w-4 h-4" />
               <span className="font-heading text-sm uppercase tracking-widest">[SIGNAL LOST]</span>
             </div>
             <p className="text-[#88837a]">Unable to reach server panel.</p>
-            <p className="text-[#88837a] text-[10px] break-all">
-              {data?.resources?.error || data?.details?.error || 'Connection failed'}
-            </p>
-            {data?.resources?.detail && (
-              <p className="text-[#88837a] text-[10px] break-all mt-1">{data.resources.detail}</p>
-            )}
+            <p className="text-[#88837a] text-[10px] break-all">{data?.resources?.error || data?.details?.error || 'Connection failed'}</p>
           </div>
         ) : noData ? (
-          <div className="text-xs font-mono text-[#88837a] text-center py-4">
-            <p>Acquiring signal...</p>
+          <div className="text-xs font-mono text-[#88837a] text-center py-4 relative z-10">
+            <p className="animate-pulse">Acquiring signal...</p>
           </div>
         ) : (
-          <>
-            {/* State */}
+          <div className="space-y-4 relative z-10">
+            {/* State + Server */}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-mono uppercase tracking-widest text-[#88837a]">State</span>
-              <span className={`text-sm font-heading uppercase tracking-wider font-bold ${
-                isRunning ? 'text-[#6b7a3d]'
-                  : isStarting ? 'text-[#c4841d]'
-                  : 'text-[#a94442]'
-              }`}>
-                {currentState}
-              </span>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[#88837a]">State</span>
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-heading uppercase tracking-wider font-bold ${
+                  isRunning ? 'text-[#6b7a3d] glow-amber-text' : isStarting ? 'text-[#c4841d]' : 'text-[#a94442]'
+                }`}>
+                  {currentState}
+                </span>
+              </div>
             </div>
-
-            {/* Server name */}
             {det?.name && (
               <div className="flex items-center justify-between">
-                <span className="text-xs font-mono uppercase tracking-widest text-[#88837a]">Server</span>
-                <span className="text-xs font-mono text-[#d4cfc4] truncate ml-2">{det.name}</span>
+                <span className="text-[10px] font-mono uppercase tracking-widest text-[#88837a]">Server</span>
+                <span className="text-[11px] font-mono text-[#d4cfc4] truncate ml-2">{det.name}</span>
               </div>
             )}
 
             {/* Player count */}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-mono uppercase tracking-widest text-[#88837a]">Players</span>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[#88837a]">Players</span>
               <span className={`text-sm font-heading uppercase tracking-wider font-bold ${
                 (onlineCount || 0) > 0 ? 'text-[#6b7a3d]' : 'text-[#88837a]'
               }`}>
@@ -113,10 +95,10 @@ export default function ServerStatus({ data, liveStats, liveState, onRefresh, is
               </span>
             </div>
 
-            {/* Online Player Roster */}
+            {/* Roster */}
             {onlinePlayers.length > 0 && (
               <div className="border border-[#2a2520] bg-[#0a0a0a] p-2" data-testid="online-roster">
-                <div className="flex items-center gap-1.5 mb-1.5 text-[10px] font-heading uppercase tracking-widest text-[#88837a]">
+                <div className="flex items-center gap-1.5 mb-1.5 text-[9px] font-heading uppercase tracking-widest text-[#88837a]">
                   <Users className="w-3 h-3" /> Active Roster
                 </div>
                 <div className="space-y-0.5">
@@ -124,7 +106,7 @@ export default function ServerStatus({ data, liveStats, liveState, onRefresh, is
                     const identity = onlineIdentities[name] || {};
                     const displayName = identity.steam_name || name;
                     return (
-                      <div key={name} className="flex items-center gap-1.5 text-xs font-mono">
+                      <div key={name} className="flex items-center gap-1.5 text-[11px] font-mono">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#6b7a3d] animate-pulse shrink-0" />
                         <span className="text-[#d4cfc4] truncate">{displayName}</span>
                         {identity.level != null && <span className="text-[#88837a]/50 text-[10px]">Lv:{identity.level}</span>}
@@ -136,51 +118,38 @@ export default function ServerStatus({ data, liveStats, liveState, onRefresh, is
               </div>
             )}
 
-            {/* Offline banner */}
+            {/* Offline/Starting banners */}
             {isOffline && (
-              <div className="border border-[#8b3a3a]/50 bg-[#8b3a3a]/5 p-3 text-center">
-                <p className="text-xs font-mono text-[#a94442]">Server is offline. No live telemetry available.</p>
-                {isAdmin && (
-                  <p className="text-[10px] font-mono text-[#88837a] mt-1">Use START below to bring the server online.</p>
-                )}
+              <div className="border border-[#8b3a3a]/30 bg-[#8b3a3a]/5 p-2.5 glow-red-soft">
+                <p className="text-[10px] font-mono text-[#a94442] text-center">Server offline. No live telemetry.</p>
+                {isAdmin && <p className="text-[9px] font-mono text-[#88837a] mt-1 text-center">Use START to bring online.</p>}
               </div>
             )}
-
-            {/* Starting banner */}
             {isStarting && (
-              <div className="border border-[#c4841d]/50 bg-[#c4841d]/5 p-3 text-center">
-                <p className="text-xs font-mono text-[#c4841d] animate-pulse">Server is starting up...</p>
+              <div className="border border-[#c4841d]/30 bg-[#c4841d]/5 p-2.5 glow-amber-soft">
+                <p className="text-[10px] font-mono text-[#c4841d] animate-pulse text-center">Server starting up...</p>
               </div>
             )}
 
-            {/* Stats — show even when offline, with muted style */}
-            <div className={`space-y-3 pt-2 border-t border-[#2a2520] ${isOffline ? 'opacity-40' : ''}`}>
-              <StatBar icon={<Cpu className="w-3.5 h-3.5" />} label="CPU" value={`${cpu.toFixed(1)}%`} pct={cpu} color="amber" />
-              <StatBar icon={<MemoryStick className="w-3.5 h-3.5" />} label="RAM" value={formatBytes(memBytes)} pct={memLimit ? (memBytes / memLimit) * 100 : 0} color="amber" />
-              <StatBar icon={<HardDrive className="w-3.5 h-3.5" />} label="Disk" value={formatBytes(diskBytes)} pct={det?.limits?.disk ? (diskBytes / (det.limits.disk * 1048576)) * 100 : 0} color="green" />
+            {/* GAUGES — SVG arc gauges */}
+            <div className={`grid grid-cols-3 gap-3 pt-2 border-t border-[#1e1a17] ${isOffline ? 'opacity-30' : ''}`}>
+              <ArcGauge icon={<Cpu className="w-3 h-3" />} label="CPU" value={cpu} max={100} unit="%" color="#c4841d" />
+              <ArcGauge icon={<MemoryStick className="w-3 h-3" />} label="RAM" value={memBytes} max={memLimit || 1} unit="" formatted={formatBytes(memBytes)} color="#6b7a3d" />
+              <ArcGauge icon={<HardDrive className="w-3 h-3" />} label="DISK" value={diskBytes} max={det?.limits?.disk ? det.limits.disk * 1048576 : diskBytes * 2} unit="" formatted={formatBytes(diskBytes)} color="#3a6b8b" />
             </div>
-          </>
-        )}
 
-        {/* Power Controls */}
-        {isAdmin && (
-          <div className="pt-3 border-t border-[#2a2520]">
-            <p className="text-xs font-mono uppercase tracking-widest text-[#88837a] mb-3">Power Controls</p>
-            <div className="grid grid-cols-2 gap-2">
-              <PowerBtn
-                data-testid="power-start-button"
-                icon={<Power className="w-3 h-3" />}
-                label="Start"
-                signal="start"
-                color="green"
-                loading={powerLoading}
-                onClick={sendPower}
-                highlight={isOffline}
-              />
-              <PowerBtn data-testid="power-stop-button" icon={<Square className="w-3 h-3" />} label="Stop" signal="stop" color="amber" loading={powerLoading} onClick={sendPower} disabled={isOffline} />
-              <PowerBtn data-testid="power-restart-button" icon={<RotateCcw className="w-3 h-3" />} label="Restart" signal="restart" color="amber" loading={powerLoading} onClick={sendPower} disabled={isOffline} />
-              <PowerBtn data-testid="power-kill-button" icon={<Zap className="w-3 h-3" />} label="Kill" signal="kill" color="red" loading={powerLoading} onClick={sendPower} disabled={isOffline} />
-            </div>
+            {/* Power Controls */}
+            {isAdmin && (
+              <div className="pt-3 border-t border-[#1e1a17]">
+                <p className="text-[9px] font-heading uppercase tracking-widest text-[#88837a] mb-2">Power Controls</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <PowerBtn icon={<Power className="w-3 h-3" />} label="Start" signal="start" color="green" loading={powerLoading} onClick={sendPower} highlight={isOffline} />
+                  <PowerBtn icon={<Square className="w-3 h-3" />} label="Stop" signal="stop" color="amber" loading={powerLoading} onClick={sendPower} disabled={isOffline} />
+                  <PowerBtn icon={<RotateCcw className="w-3 h-3" />} label="Restart" signal="restart" color="amber" loading={powerLoading} onClick={sendPower} disabled={isOffline} />
+                  <PowerBtn icon={<Zap className="w-3 h-3" />} label="Kill" signal="kill" color="red" loading={powerLoading} onClick={sendPower} disabled={isOffline} />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -188,39 +157,63 @@ export default function ServerStatus({ data, liveStats, liveState, onRefresh, is
   );
 }
 
-function StatBar({ icon, label, value, pct, color }) {
-  const barColor = color === 'green' ? 'bg-[#4a5c3a]' : 'bg-[#c4841d]';
+
+function ArcGauge({ icon, label, value, max, unit, formatted, color }) {
+  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+  const circumference = 2 * Math.PI * 40;
+  const dashOffset = circumference - (pct / 100) * circumference * 0.75; // 270-degree arc
+  const displayVal = formatted || `${pct.toFixed(1)}${unit}`;
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2 text-[#88837a]">
-          {icon}
-          <span className="text-xs font-mono uppercase tracking-widest">{label}</span>
+    <div className="flex flex-col items-center">
+      <div className="relative w-[72px] h-[72px]">
+        <svg viewBox="0 0 100 100" className="w-full h-full">
+          {/* Track */}
+          <circle
+            cx="50" cy="50" r="40"
+            className="gauge-track"
+            strokeDasharray={`${circumference * 0.75} ${circumference * 0.25}`}
+            strokeDashoffset="0"
+            transform="rotate(135 50 50)"
+          />
+          {/* Value */}
+          <circle
+            cx="50" cy="50" r="40"
+            className="gauge-ring gauge-value"
+            stroke={color}
+            strokeDasharray={`${circumference * 0.75} ${circumference * 0.25}`}
+            strokeDashoffset={dashOffset}
+            transform="rotate(135 50 50)"
+            style={{ filter: `drop-shadow(0 0 3px ${color}40)` }}
+          />
+        </svg>
+        {/* Center label */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-[11px] font-mono font-bold" style={{ color }}>{displayVal}</span>
         </div>
-        <span className="text-xs font-mono text-[#d4cfc4]">{value}</span>
       </div>
-      <div className="h-1.5 bg-[#111111] border border-[#2a2520]">
-        <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${Math.min(pct, 100)}%` }} />
+      <div className="flex items-center gap-1 mt-0.5 text-[#88837a]">
+        {icon}
+        <span className="text-[9px] font-heading uppercase tracking-widest">{label}</span>
       </div>
     </div>
   );
 }
 
+
 function PowerBtn({ icon, label, signal, color, loading, onClick, highlight, disabled, ...props }) {
   const colors = {
-    green: 'border-[#4a5c3a] text-[#4a5c3a] hover:bg-[#4a5c3a] hover:text-[#111111]',
-    amber: 'border-[#c4841d] text-[#c4841d] hover:bg-[#c4841d] hover:text-[#111111]',
-    red: 'border-[#8b3a3a] text-[#8b3a3a] hover:bg-[#8b3a3a] hover:text-[#111111]',
+    green: 'border-[#4a5c3a] text-[#4a5c3a] hover:bg-[#4a5c3a] hover:text-[#0d0d0d]',
+    amber: 'border-[#c4841d] text-[#c4841d] hover:bg-[#c4841d] hover:text-[#0d0d0d]',
+    red: 'border-[#8b3a3a] text-[#8b3a3a] hover:bg-[#8b3a3a] hover:text-[#0d0d0d]',
   };
-  const highlightClass = highlight
-    ? 'bg-[#4a5c3a]/20 shadow-[0_0_10px_rgba(74,92,58,0.3)] border-2'
-    : '';
+  const highlightClass = highlight ? 'bg-[#4a5c3a]/10 glow-green-soft border-2' : '';
   return (
     <button
       {...props}
       onClick={() => onClick(signal)}
       disabled={loading === signal || disabled}
-      className={`border ${colors[color]} ${highlightClass} font-heading text-xs uppercase tracking-widest font-bold p-2 flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed`}
+      className={`border ${colors[color]} ${highlightClass} font-heading text-[10px] uppercase tracking-widest font-bold py-2 flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed`}
     >
       {icon} {loading === signal ? '...' : label}
     </button>

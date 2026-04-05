@@ -88,8 +88,8 @@ export default function FactionPanel({ user }) {
       {/* My Faction / Invites */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* My Faction */}
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header flex justify-between items-center">
             <div className="flex items-center gap-2">
               <Flag className="w-4 h-4 text-[#c4841d]" />
               <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Your Faction</h3>
@@ -136,8 +136,8 @@ export default function FactionPanel({ user }) {
         </div>
 
         {/* Pending Invites */}
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header">
             <div className="flex items-center gap-2">
               <UserPlus className="w-4 h-4 text-[#c4841d]" />
               <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Pending Invites</h3>
@@ -161,8 +161,8 @@ export default function FactionPanel({ user }) {
       </div>
 
       {/* All Factions List */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header">
           <div className="flex items-center gap-2">
             <Swords className="w-4 h-4 text-[#c4841d]" />
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Active Factions</h3>
@@ -271,8 +271,8 @@ function CreateFactionForm({ onBack, onCreated }) {
   };
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg max-w-lg">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center justify-between">
+    <div className="ds-panel panel-inset noise-bg max-w-lg">
+      <div className="ds-panel-header flex items-center justify-between">
         <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Found a Faction</h3>
         <button onClick={onBack} className="text-[#88837a] hover:text-[#c4841d] transition-colors">
           <X className="w-4 h-4" />
@@ -429,7 +429,7 @@ function FactionDetail({ data, user, myMembership, onBack, onRefresh }) {
       </button>
 
       {/* Faction Header */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
+      <div className="ds-panel panel-inset noise-bg">
         <div className="border-b border-[#2a2520] bg-[#111111] p-4">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-4 h-4 rounded-full" style={{ backgroundColor: faction.color }} />
@@ -450,8 +450,8 @@ function FactionDetail({ data, user, myMembership, onBack, onRefresh }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Members */}
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-[#c4841d]" />
               <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Roster</h3>
@@ -515,8 +515,8 @@ function FactionDetail({ data, user, myMembership, onBack, onRefresh }) {
         </div>
 
         {/* Diplomacy */}
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header flex justify-between items-center">
             <div className="flex items-center gap-2">
               <Handshake className="w-4 h-4 text-[#c4841d]" />
               <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Diplomacy</h3>
@@ -558,8 +558,8 @@ function FactionDetail({ data, user, myMembership, onBack, onRefresh }) {
 
       {/* Reputation */}
       {reputation.length > 0 && (
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-[#c4841d]" />
               <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Reputation</h3>
@@ -603,8 +603,8 @@ function FactionDetail({ data, user, myMembership, onBack, onRefresh }) {
 
       {/* Territory */}
       {territories.length > 0 && (
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header">
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4 text-[#c4841d]" />
               <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">

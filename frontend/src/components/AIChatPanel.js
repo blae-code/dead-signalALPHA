@@ -185,13 +185,13 @@ export default function AIChatPanel({ user }) {
       </div>
 
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col border border-[#2a2520] bg-[#0d0d0d] min-w-0">
+      <div className="flex-1 flex flex-col ds-panel min-w-0">
         {/* Header */}
-        <div className="border-b border-[#2a2520] bg-[#111111] px-4 py-2.5 flex items-center gap-3">
+        <div className="ds-panel-header">
           <button onClick={() => setShowSessions(s => !s)} className="lg:hidden text-[#88837a] hover:text-[#c4841d] transition-colors">
             <MessageSquare className="w-4 h-4" />
           </button>
-          <div className="w-7 h-7 border border-[#c4841d] flex items-center justify-center flex-shrink-0">
+          <div className="w-7 h-7 border border-[#c4841d] flex items-center justify-center flex-shrink-0 glow-amber-soft">
             <Radio className="w-3.5 h-3.5 text-[#c4841d]" />
           </div>
           <div className="flex-1 min-w-0">
@@ -349,14 +349,14 @@ function ChatBubble({ msg, isAdmin }) {
   // AI response
   return (
     <div className="flex items-start gap-2 pl-1">
-      <div className="w-6 h-6 border border-[#c4841d]/40 flex items-center justify-center flex-shrink-0 mt-0.5">
+      <div className="w-6 h-6 border border-[#c4841d]/30 flex items-center justify-center flex-shrink-0 mt-0.5 glow-amber-soft">
         <Radio className="w-3 h-3 text-[#c4841d]" />
       </div>
       <div className="max-w-[85%] space-y-2">
-        <div className="border border-[#2a2520] bg-[#111111] px-3 py-2">
+        <div className="border border-[#2a2520] bg-[#111111] px-3 py-2 scan-reveal" style={{ borderLeft: '2px solid rgba(196,132,29,0.3)' }}>
           <p className="text-[11px] font-mono text-[#d4cfc4] leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-          <p className="text-[9px] font-mono text-[#88837a]/40 mt-1">
-            {msg.timestamp?.slice(11, 16)}
+          <p className="text-[9px] font-mono text-[#88837a]/30 mt-1">
+            SIGINT {msg.timestamp?.slice(11, 19)}
           </p>
         </div>
 

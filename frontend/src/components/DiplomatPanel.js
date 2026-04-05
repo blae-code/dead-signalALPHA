@@ -64,8 +64,8 @@ export default function DiplomatPanel() {
   return (
     <div className="space-y-4" data-testid="diplomat-panel">
       {/* Reputation Matrix */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center justify-between">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-[#c4841d]" />
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Reputation Matrix</h3>
@@ -102,8 +102,8 @@ export default function DiplomatPanel() {
       </div>
 
       {/* Strategic Analysis */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center justify-between">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Brain className="w-4 h-4 text-[#c4841d]" />
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">AI Strategic Assessment</h3>
@@ -137,8 +137,8 @@ export default function DiplomatPanel() {
       </div>
 
       {/* Treaty Advisor */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center gap-2">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header flex items-center gap-2">
           <Handshake className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Treaty Advisor</h3>
         </div>

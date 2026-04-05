@@ -18,6 +18,7 @@ import SteamLinkCard from '@/components/SteamLinkCard';
 import ResourceHub from '@/components/ResourceHub';
 import SurvivalPlanner from '@/components/SurvivalPlanner';
 import WeatherOverlay from '@/components/WeatherOverlay';
+import CRTOverlay from '@/components/CRTOverlay';
 import LiveStatusBar from '@/components/LiveStatusBar';
 import AIChatPanel from '@/components/AIChatPanel';
 import PushNotificationSetup from '@/components/PushNotificationSetup';
@@ -168,19 +169,27 @@ export default function DashboardPage({ user: propUser, onLogout }) {
 
   return (
     <div className="min-h-screen bg-[#111111] flex flex-col" data-testid="dashboard-page">
-      {/* Weather overlay — responds to live world conditions */}
+      {/* Atmospheric overlays */}
       <WeatherOverlay weather={worldState?.weather} />
+      <CRTOverlay />
 
       {/* Header */}
-      <header className="border-b border-[#2a2520] bg-[#111111]/95 backdrop-blur-sm px-4 py-3 flex items-center justify-between relative z-20">
+      <header className="border-b border-[#1e1a17] bg-[#0a0a0a]/98 backdrop-blur-sm px-4 py-2.5 flex items-center justify-between relative z-20">
+        {/* Header bottom glow line */}
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#c4841d]/20 to-transparent" />
+
         <div className="flex items-center gap-3">
-          <Radio className="w-5 h-5 text-[#c4841d] glow-amber" />
-          <h1 className="font-heading text-xl sm:text-2xl font-bold uppercase tracking-[0.15em] text-[#c4841d] glow-amber-text">
-            Dead Signal
-          </h1>
-          <span className="hidden lg:inline text-xs font-mono text-[#88837a] ml-2">
-            // COMMAND TERMINAL v1.0
-          </span>
+          <div className="w-8 h-8 border border-[#c4841d]/40 flex items-center justify-center glow-amber-soft">
+            <Radio className="w-4 h-4 text-[#c4841d]" />
+          </div>
+          <div>
+            <h1 className="font-heading text-lg sm:text-xl font-bold uppercase tracking-[0.2em] text-[#c4841d] glow-amber-text leading-none">
+              Dead Signal
+            </h1>
+            <span className="text-[8px] font-mono text-[#88837a]/30 tracking-[0.3em] uppercase">
+              TACTICAL COMPANION // HumanitZ
+            </span>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -305,13 +314,15 @@ export default function DashboardPage({ user: propUser, onLogout }) {
       <main className="flex-1 p-4 overflow-auto relative z-10">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           {/* Desktop tab bar */}
-          <TabsList className="hidden md:flex bg-[#111111] border border-[#2a2520] rounded-none p-1 mb-4 w-full justify-start overflow-x-auto gap-0">
+          <TabsList className="hidden md:flex bg-[#0a0a0a] border border-[#1e1a17] rounded-none p-0 mb-4 w-full justify-start overflow-x-auto gap-0 relative">
+            {/* Bottom accent line */}
+            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-[#c4841d]/10 via-transparent to-[#c4841d]/10" />
             {TAB_LIST.map((t) => (
               <TabsTrigger
                 key={t.id}
                 data-testid={`tab-${t.id}`}
                 value={t.id}
-                className={`relative rounded-none font-heading uppercase tracking-widest text-xs data-[state=active]:bg-[#c4841d]/10 data-[state=active]:text-[#c4841d] data-[state=active]:border-b-2 data-[state=active]:border-[#c4841d] text-[#88837a] hover:text-[#d4cfc4] px-4 py-2 ${tabActivity[t.id] ? 'tab-pulse' : ''}`}
+                className={`relative rounded-none font-heading uppercase tracking-[0.15em] text-[11px] data-[state=active]:bg-transparent data-[state=active]:text-[#c4841d] data-[state=active]:shadow-none text-[#88837a] hover:text-[#d4cfc4] hover:bg-[#111111] px-5 py-2.5 border-b-2 border-transparent data-[state=active]:border-[#c4841d] transition-all ${tabActivity[t.id] ? 'tab-pulse' : ''}`}
               >
                 <span className="flex items-center gap-1.5">{t.icon} {t.label}</span>
               </TabsTrigger>

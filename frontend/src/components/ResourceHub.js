@@ -104,8 +104,8 @@ function TradeBoard({ user }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* Trade List */}
-      <div className="lg:col-span-2 border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+      <div className="lg:col-span-2 ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header flex justify-between items-center">
           <div className="flex items-center gap-2">
             <ArrowRightLeft className="w-4 h-4 text-[#c4841d]" />
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Active Trades</h3>
@@ -185,8 +185,8 @@ function TradeBoard({ user }) {
       </div>
 
       {/* Quick Trade Guide */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header">
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Trade Protocol</h3>
         </div>
         <div className="p-3 space-y-3 text-[10px] font-mono text-[#88837a]">
@@ -309,8 +309,8 @@ function SupplyBoard({ user }) {
   };
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+    <div className="ds-panel panel-inset noise-bg">
+      <div className="ds-panel-header flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Send className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Supply Requests</h3>
@@ -427,8 +427,8 @@ function CraftingPlanner() {
   const filtered = filter === 'all' ? recipes : recipes.filter((r) => r.category === filter);
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+    <div className="ds-panel panel-inset noise-bg">
+      <div className="ds-panel-header">
         <div className="flex items-center gap-2 mb-2">
           <Hammer className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Crafting Planner</h3>
@@ -507,8 +507,8 @@ function ScarcityIndex({ liveScarcity, liveWorldState }) {
   const filtered = filter === 'all' ? resources : resources.filter((r) => r.category === filter);
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+    <div className="ds-panel panel-inset noise-bg">
+      <div className="ds-panel-header">
         <div className="flex items-center gap-2 mb-2">
           <Package className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Scarcity Index</h3>

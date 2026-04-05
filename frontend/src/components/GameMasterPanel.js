@@ -137,18 +137,18 @@ function GMOverview({ stats, onRefresh }) {
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         {cards.map((c, i) => (
-          <div key={i} className="border border-[#2a2520] bg-[#1a1a1a]/95 p-4 panel-inset noise-bg">
-            <div className="flex items-center gap-2 mb-2" style={{ color: c.color }}>
+          <div key={i} className="ds-panel panel-inset noise-bg p-4 panel-hover">
+            <div className="flex items-center gap-2 mb-2 relative z-10" style={{ color: c.color }}>
               {c.icon}
               <span className="text-[10px] font-mono uppercase tracking-widest text-[#88837a]">{c.label}</span>
             </div>
-            <p className="font-heading text-2xl font-bold" style={{ color: c.color }}>{c.value}</p>
+            <p className="font-heading text-2xl font-bold relative z-10" style={{ color: c.color, textShadow: `0 0 12px ${c.color}30` }}>{c.value}</p>
           </div>
         ))}
       </div>
 
       {/* AI Narrative Auto-Broadcast Toggle */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg p-4">
+      <div className="ds-panel panel-inset noise-bg p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Volume2 className={`w-5 h-5 ${autoBroadcast ? 'text-[#6b7a3d]' : 'text-[#88837a]'}`} />
@@ -207,8 +207,8 @@ function SchedulerPanel() {
   };
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+    <div className="ds-panel panel-inset noise-bg">
+      <div className="ds-panel-header flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Scheduled Tasks</h3>
@@ -377,8 +377,8 @@ function BroadcastPanel() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-[#c4841d]" />
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Send Broadcast</h3>
@@ -412,8 +412,8 @@ function BroadcastPanel() {
         </div>
       </div>
 
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header flex justify-between items-center">
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Broadcast History</h3>
           <button onClick={fetchHistory} className="text-[#88837a] hover:text-[#c4841d]"><RefreshCw className="w-3.5 h-3.5" /></button>
         </div>
@@ -506,8 +506,8 @@ function PlayerAdminPanel() {
       {/* Actions + Notes Column */}
       <div className="space-y-4">
         {/* Quick Action */}
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header">
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4 text-[#c4841d]" />
               <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Player Action</h3>
@@ -530,8 +530,8 @@ function PlayerAdminPanel() {
         </div>
 
         {/* Add Note */}
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-[#c4841d]" />
               <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Add Note</h3>
@@ -556,8 +556,8 @@ function PlayerAdminPanel() {
       {/* Player Lists */}
       <div className="space-y-4">
         {/* Tracked Players */}
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header flex justify-between items-center">
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Tracked Players</h3>
             <button onClick={fetchAll} className="text-[#88837a] hover:text-[#c4841d]"><RefreshCw className="w-3.5 h-3.5" /></button>
           </div>
@@ -576,8 +576,8 @@ function PlayerAdminPanel() {
         </div>
 
         {/* Banned */}
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header">
             <div className="flex items-center gap-2">
               <Ban className="w-4 h-4 text-[#8b3a3a]" />
               <h3 className="font-heading text-sm uppercase tracking-widest text-[#8b3a3a]">Ban List</h3>
@@ -600,8 +600,8 @@ function PlayerAdminPanel() {
       </div>
 
       {/* Player Detail */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header">
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">
             {selected ? `Player: ${selected}` : 'Select a Player'}
           </h3>
@@ -689,8 +689,8 @@ function TriggersPanel() {
   };
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+    <div className="ds-panel panel-inset noise-bg">
+      <div className="ds-panel-header flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Zap className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Event Triggers</h3>
@@ -1075,8 +1075,8 @@ function QuickCommandsPanel() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header">
           <div className="flex items-center gap-2">
             <Terminal className="w-4 h-4 text-[#c4841d]" />
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Save Quick Command</h3>
@@ -1092,8 +1092,8 @@ function QuickCommandsPanel() {
         </div>
       </div>
 
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header flex justify-between items-center">
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Saved Commands</h3>
           <button onClick={fetch} className="text-[#88837a] hover:text-[#c4841d]"><RefreshCw className="w-3.5 h-3.5" /></button>
         </div>
@@ -1145,8 +1145,8 @@ function ActionLogPanel() {
   };
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+    <div className="ds-panel panel-inset noise-bg">
+      <div className="ds-panel-header flex justify-between items-center">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Action Log</h3>

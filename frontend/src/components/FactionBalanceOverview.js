@@ -21,8 +21,8 @@ export default function FactionBalanceOverview() {
   const maxMembers = Math.max(...factions.map((f) => f.member_count || 0), 1);
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg" data-testid="faction-balance">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center justify-between">
+    <div className="ds-panel panel-inset noise-bg" data-testid="faction-balance">
+      <div className="ds-panel-header flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Swords className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Faction Balance Overview</h3>

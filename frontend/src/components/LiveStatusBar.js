@@ -42,62 +42,66 @@ export default function LiveStatusBar({ worldState }) {
 
   return (
     <div
-      className="border-b border-[#2a2520] bg-[#0a0a0a]/90 px-4 py-1.5 flex items-center gap-4 overflow-x-auto text-[10px] font-mono"
+      className="border-b border-[#1e1a17] bg-[#0a0a0a] px-4 py-1.5 flex items-center gap-0 overflow-x-auto text-[10px] font-mono relative"
       data-testid="live-status-bar"
-      style={{ transition: 'background-color 1.5s ease' }}
     >
+      {/* Subtle bottom glow line */}
+      <div className="absolute bottom-0 left-0 right-0 h-px" style={{
+        background: `linear-gradient(90deg, transparent, ${dangerColor}33, transparent)`,
+      }} />
+
       {/* Live indicator */}
-      <div className="flex items-center gap-1.5 text-[#6b7a3d] shrink-0">
+      <div className="flex items-center gap-1.5 text-[#6b7a3d] shrink-0 pr-3">
         <Radio className="w-3 h-3 animate-pulse" />
-        <span className="uppercase tracking-widest">Live</span>
+        <span className="uppercase tracking-[0.2em] text-[9px]">Live</span>
       </div>
 
-      <div className="w-px h-3 bg-[#2a2520]" />
+      <Sep />
 
       {/* Time */}
-      <div className="flex items-center gap-1.5 text-[#d4cfc4] shrink-0" style={{ transition: 'color 0.5s ease' }}>
+      <div className="flex items-center gap-1.5 text-[#d4cfc4] shrink-0 px-3">
         <span className="text-[#c4841d]">{TIME_ICONS[worldState.time_of_day]}</span>
-        <span>{worldState.hour_display}</span>
-        <span className="text-[#88837a] uppercase">{worldState.time_of_day}</span>
+        <span className="tabular-nums">{worldState.hour_display}</span>
+        <span className="text-[#88837a]/60 uppercase text-[9px]">{worldState.time_of_day}</span>
       </div>
 
-      <div className="w-px h-3 bg-[#2a2520]" />
+      <Sep />
 
       {/* Weather */}
-      <div className="flex items-center gap-1.5 text-[#d4cfc4] shrink-0" style={{ transition: 'color 0.5s ease' }}>
+      <div className="flex items-center gap-1.5 text-[#d4cfc4] shrink-0 px-3">
         <span className="text-[#c4841d]">{WEATHER_ICONS[worldState.weather]}</span>
         <span className="uppercase">{worldState.weather}</span>
-        <span className="text-[#88837a] flex items-center gap-0.5">
+        <span className="text-[#88837a]/60 flex items-center gap-0.5">
           <Thermometer className="w-2.5 h-2.5" />
-          {worldState.temperature}°C
+          <span className="tabular-nums">{worldState.temperature}°C</span>
         </span>
       </div>
 
-      <div className="w-px h-3 bg-[#2a2520]" />
+      <Sep />
 
-      {/* Season */}
-      <div className="flex items-center gap-1.5 text-[#d4cfc4] shrink-0">
+      {/* Season + Day */}
+      <div className="flex items-center gap-1.5 text-[#d4cfc4] shrink-0 px-3">
         <span className="text-[#c4841d]">{SEASON_ICONS[worldState.season]}</span>
         <span className="uppercase">{worldState.season}</span>
-        <span className="text-[#88837a]">Day {worldState.day}</span>
+        <span className="text-[#88837a]/60">D{worldState.day}</span>
       </div>
 
-      <div className="w-px h-3 bg-[#2a2520]" />
+      <Sep />
 
       {/* Danger */}
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center gap-2 shrink-0 px-3">
         <ShieldAlert className="w-3 h-3" style={{ color: dangerColor }} />
-        <span className="uppercase tracking-widest font-bold" style={{ color: dangerColor, transition: 'color 0.5s ease' }}>
-          Threat: {dangerLabel}
+        <span className="uppercase tracking-widest font-bold text-[9px]" style={{ color: dangerColor, textShadow: `0 0 8px ${dangerColor}40` }}>
+          {dangerLabel}
         </span>
-        <div className="flex gap-0.5">
-          {Array.from({ length: 5 }).map((_, i) => (
+        <div className="flex gap-[2px]">
+          {Array.from({ length: 10 }).map((_, i) => (
             <div
               key={i}
-              className="w-1 h-2.5"
+              className="w-[3px] h-[8px] transition-all duration-700"
               style={{
-                backgroundColor: i < Math.ceil(worldState.danger_level / 2) ? dangerColor : '#2a2520',
-                transition: 'background-color 1s ease',
+                backgroundColor: i < worldState.danger_level ? dangerColor : '#1e1a17',
+                boxShadow: i < worldState.danger_level ? `0 0 3px ${dangerColor}60` : 'none',
               }}
             />
           ))}
@@ -107,12 +111,21 @@ export default function LiveStatusBar({ worldState }) {
       {/* Custom alert */}
       {worldState.custom_alert && (
         <>
-          <div className="w-px h-3 bg-[#2a2520]" />
-          <span className="text-[#8b3a3a] uppercase tracking-wider truncate max-w-[200px] shrink-0">
+          <Sep />
+          <span className="text-[#8b3a3a] uppercase tracking-wider truncate max-w-[200px] shrink-0 px-3 animate-pulse">
             {worldState.custom_alert}
           </span>
         </>
       )}
+
+      {/* System identifier — right-aligned */}
+      <div className="ml-auto shrink-0 pl-4">
+        <span className="text-[8px] tracking-[0.3em] text-[#88837a]/20 uppercase">DEAD.SIGNAL//V1</span>
+      </div>
     </div>
   );
+}
+
+function Sep() {
+  return <div className="w-px h-3 bg-[#2a2520] shrink-0 mx-0" />;
 }

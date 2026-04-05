@@ -75,8 +75,8 @@ export default function SteamLinkCard() {
   return (
     <div className="space-y-4" data-testid="steam-link-card">
       {/* Link Status */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center gap-2">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header flex items-center gap-2">
           <Gamepad2 className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Game Identity Link</h3>
           {isLinked && (
@@ -178,10 +178,10 @@ export default function SteamLinkCard() {
       </div>
 
       {/* Known Players Picker */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
+      <div className="ds-panel panel-inset noise-bg">
         <button
           onClick={() => setShowPicker(!showPicker)}
-          className="w-full border-b border-[#2a2520] bg-[#111111] p-3 flex items-center justify-between"
+          className="w-full ds-panel-header flex items-center justify-between"
         >
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-[#88837a]" />

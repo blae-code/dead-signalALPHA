@@ -102,7 +102,7 @@ export default function WorldConditions({ liveWorldState }) {
 
   if (!world) {
     return (
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg p-4">
+      <div className="ds-panel panel-inset noise-bg p-4">
         <div className="flex items-center gap-2">
           <Eye className="w-4 h-4 text-[#88837a] animate-pulse" />
           <span className="text-xs font-mono text-[#88837a]">Scanning world conditions...</span>
@@ -122,12 +122,13 @@ export default function WorldConditions({ liveWorldState }) {
   const isNightHour = world.hour >= 20 || world.hour < 5;
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg" data-testid="world-conditions">
+    <div className="ds-panel panel-inset noise-bg" data-testid="world-conditions">
       {/* Header */}
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center justify-between">
+      <div className="ds-panel-header justify-between">
         <div className="flex items-center gap-2">
           <Leaf className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">World Conditions</h3>
+          <span className="text-[9px] font-mono text-[#88837a]/40 tracking-widest">ENV.04</span>
           {isLive && (
             <span className="flex items-center gap-1 text-[10px] font-mono text-[#6b7a3d]" data-testid="world-live-indicator">
               <Radio className="w-3 h-3 animate-pulse" />

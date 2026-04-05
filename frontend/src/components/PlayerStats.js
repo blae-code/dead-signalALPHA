@@ -140,8 +140,8 @@ export default function PlayerStats() {
       <FactionStandings />
 
       {/* Leaderboard */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg" data-testid="leaderboard">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center justify-between">
+      <div className="ds-panel panel-inset noise-bg" data-testid="leaderboard">
+        <div className="ds-panel-header flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-[#c4841d]" />
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Leaderboard</h3>
@@ -179,8 +179,8 @@ function FactionStandings() {
   const sorted = [...factions].sort((a, b) => (b.territories?.length || 0) - (a.territories?.length || 0));
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg" data-testid="faction-standings">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center gap-2">
+    <div className="ds-panel panel-inset noise-bg" data-testid="faction-standings">
+      <div className="ds-panel-header flex items-center gap-2">
         <Award className="w-4 h-4 text-[#7a3d6b]" />
         <h3 className="font-heading text-sm uppercase tracking-widest text-[#7a3d6b]">Faction Standings</h3>
       </div>

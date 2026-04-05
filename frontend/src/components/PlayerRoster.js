@@ -48,8 +48,8 @@ export default function PlayerRoster({ isAdmin }) {
   const onlineNames = new Set(onlineList.map((p) => (typeof p === 'string' ? p : p.name)));
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg" data-testid="player-roster-panel">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+    <div className="ds-panel panel-inset noise-bg" data-testid="player-roster-panel">
+      <div className="ds-panel-header flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Users className="w-4 h-4 text-[#c4841d]" />
           <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Player Roster</h3>

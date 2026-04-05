@@ -94,16 +94,12 @@ export default function NarrativePanel({ events, liveNarrations = [], isAdmin })
   };
 
   return (
-    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg" data-testid="narrative-panel">
-      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <Radio className="w-4 h-4 text-[#c4841d] glow-amber" />
-          <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">AI Narrative Dispatch</h3>
-        </div>
-        <div className="flex items-center gap-2 text-xs font-mono text-[#88837a]">
-          <Wifi className="w-3 h-3" />
-          <span>GEMINI 2.5 FLASH</span>
-        </div>
+    <div className="ds-panel panel-inset noise-bg" data-testid="narrative-panel">
+      <div className="ds-panel-header">
+        <Radio className="w-4 h-4 text-[#c4841d]" />
+        <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d] flex-1">AI Narrative Dispatch</h3>
+        <span className="text-[9px] font-mono text-[#88837a]/40 tracking-widest mr-2">NAR.03</span>
+        <Wifi className="w-3 h-3 text-[#88837a]" />
       </div>
 
       <div className="p-4">

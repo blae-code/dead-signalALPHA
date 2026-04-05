@@ -31,6 +31,24 @@
     --chart-3: 0 41% 39%;
     --chart-4: 35 11% 82%;
     --chart-5: 20 9% 15%;
+
+    /* Dead Signal palette */
+    --ds-bg: #0d0d0d;
+    --ds-surface: #111111;
+    --ds-surface-2: #161616;
+    --ds-border: #2a2520;
+    --ds-border-dim: #1e1a17;
+    --ds-text: #d4cfc4;
+    --ds-text-dim: #88837a;
+    --ds-text-ghost: #3a3530;
+    --ds-amber: #c4841d;
+    --ds-amber-dim: rgba(196,132,29,0.15);
+    --ds-green: #6b7a3d;
+    --ds-green-dim: rgba(107,122,61,0.15);
+    --ds-red: #8b3a3a;
+    --ds-red-dim: rgba(139,58,58,0.15);
+    --ds-blue: #3a6b8b;
+    --ds-purple: #7a3d6b;
   }
 }
 
@@ -41,32 +59,129 @@ body {
   font-family: 'JetBrains Mono', monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #111111;
-  color: #d4cfc4;
+  background-color: var(--ds-bg);
+  color: var(--ds-text);
 }
 
 .font-heading {
   font-family: 'Barlow Condensed', sans-serif;
 }
-
 .font-mono {
   font-family: 'JetBrains Mono', monospace;
 }
 
-/* CRT Scanline Overlay */
+/* ═══════════════════════════════════════
+   CRT / ATMOSPHERE
+   ═══════════════════════════════════════ */
+
 .crt-overlay {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 50;
-  background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.25) 50%);
-  background-size: 100% 4px;
-  opacity: 0.4;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.15) 2px,
+      rgba(0,0,0,0.15) 4px
+    );
+  opacity: 0.3;
+  mix-blend-mode: multiply;
 }
 
-/* Amber glow */
-.glow-amber { filter: drop-shadow(0 0 8px rgba(196,132,29,0.8)); }
-.glow-amber-text { text-shadow: 0 0 10px rgba(196,132,29,0.6), 0 0 20px rgba(196,132,29,0.3); }
+/* Vignette — darkens screen edges like a CRT tube */
+.crt-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 50%,
+    rgba(0,0,0,0.6) 100%
+  );
+}
+
+/* ═══════════════════════════════════════
+   PANEL SYSTEM — the core visual language
+   ═══════════════════════════════════════ */
+
+/* Corner bracket decorations */
+.ds-panel {
+  position: relative;
+  border: 1px solid var(--ds-border);
+  background: var(--ds-surface);
+  overflow: hidden;
+}
+.ds-panel::before,
+.ds-panel::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: var(--ds-amber);
+  border-style: solid;
+  border-width: 0;
+  opacity: 0.4;
+  z-index: 2;
+  pointer-events: none;
+}
+.ds-panel::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+.ds-panel::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
+}
+
+/* Panel header with bottom-left + bottom-right brackets */
+.ds-panel-header {
+  position: relative;
+  border-bottom: 1px solid var(--ds-border);
+  background: linear-gradient(180deg, rgba(17,17,17,1) 0%, rgba(13,13,13,1) 100%);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ds-panel-header::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--ds-amber) 0%, transparent 40%, transparent 60%, var(--ds-amber) 100%);
+  opacity: 0.2;
+}
+
+/* Panel body with subtle grid */
+.ds-panel-body {
+  padding: 14px;
+  position: relative;
+}
+
+/* Grid pattern overlay for panels */
+.ds-grid-bg {
+  position: relative;
+}
+.ds-grid-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(196,132,29,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(196,132,29,0.02) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+  z-index: 0;
+}
 
 /* Noise texture via SVG data URI */
 .noise-bg { position: relative; }
@@ -74,13 +189,33 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  opacity: 0.04;
+  opacity: 0.035;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
   pointer-events: none;
   z-index: 1;
 }
 
-/* Pulse for live indicators */
+/* Inset shadow for depth */
+.panel-inset {
+  box-shadow:
+    inset 0 0 40px rgba(0,0,0,0.9),
+    inset 0 1px 0 rgba(196,132,29,0.03);
+}
+
+/* ═══════════════════════════════════════
+   GLOW EFFECTS
+   ═══════════════════════════════════════ */
+
+.glow-amber { filter: drop-shadow(0 0 8px rgba(196,132,29,0.8)); }
+.glow-amber-text { text-shadow: 0 0 10px rgba(196,132,29,0.6), 0 0 20px rgba(196,132,29,0.3); }
+.glow-amber-soft { box-shadow: 0 0 20px rgba(196,132,29,0.08), inset 0 0 20px rgba(196,132,29,0.03); }
+.glow-green-soft { box-shadow: 0 0 20px rgba(107,122,61,0.08), inset 0 0 20px rgba(107,122,61,0.03); }
+.glow-red-soft { box-shadow: 0 0 20px rgba(139,58,58,0.08), inset 0 0 20px rgba(139,58,58,0.03); }
+
+/* ═══════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════ */
+
 @keyframes pulse-amber {
   0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(196,132,29,0.5); }
   50% { opacity: 0.6; box-shadow: 0 0 14px rgba(196,132,29,0.9); }
@@ -93,7 +228,20 @@ body {
 }
 .pulse-green { animation: pulse-green 2s ease-in-out infinite; }
 
-/* Typewriter cursor blink */
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(139,58,58,0.4); }
+  50% { opacity: 0.7; box-shadow: 0 0 12px rgba(139,58,58,0.7); }
+}
+.pulse-red { animation: pulse-red 2s ease-in-out infinite; }
+
+/* Subtle data update flash */
+@keyframes data-flash {
+  0% { background-color: rgba(196,132,29,0.08); }
+  100% { background-color: transparent; }
+}
+.data-flash { animation: data-flash 0.6s ease-out; }
+
+/* Typewriter cursor */
 @keyframes blink-cursor {
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }
@@ -101,41 +249,111 @@ body {
 .typewriter-cursor::after {
   content: '\25AE';
   animation: blink-cursor 1s step-end infinite;
-  color: #c4841d;
+  color: var(--ds-amber);
   margin-left: 2px;
 }
 
-/* Panel inset shadow */
-.panel-inset { box-shadow: inset 0 0 30px rgba(0,0,0,0.8); }
-
 /* Smooth tab/panel transitions */
-[data-state="active"] { animation: fadeSlideIn 0.3s ease-out; }
+[data-state="active"] { animation: fadeSlideIn 0.25s ease-out; }
 @keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Event entry stagger animation */
-.event-enter { animation: eventSlideIn 0.35s ease-out both; }
+/* Event entry stagger */
+.event-enter { animation: eventSlideIn 0.3s ease-out both; }
 @keyframes eventSlideIn {
-  from { opacity: 0; transform: translateX(-12px); }
+  from { opacity: 0; transform: translateX(-8px); }
   to   { opacity: 1; transform: translateX(0); }
 }
 
 /* Narration entry */
-.narration-enter { animation: narrationFade 0.6s ease-out both; }
+.narration-enter { animation: narrationFade 0.5s ease-out both; }
 @keyframes narrationFade {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Button micro-interactions */
-button { transition: transform 0.1s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease; }
+/* Scan line sweep — used on SIGINT messages */
+@keyframes scanline-sweep {
+  from { top: -2px; }
+  to   { top: 100%; }
+}
+.scan-reveal {
+  position: relative;
+  overflow: hidden;
+}
+.scan-reveal::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(196,132,29,0.25), transparent);
+  animation: scanline-sweep 0.8s ease-out forwards;
+  pointer-events: none;
+}
+
+/* Gauge arc shimmer */
+@keyframes gauge-shimmer {
+  from { stroke-dashoffset: 251; }
+}
+
+/* ═══════════════════════════════════════
+   BUTTONS & INTERACTIONS
+   ═══════════════════════════════════════ */
+
+button {
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    opacity 0.2s ease;
+}
 button:active:not(:disabled) { transform: scale(0.97); }
+
+/* Tactical button with side accents */
+.ds-btn {
+  position: relative;
+  border: 1px solid var(--ds-border);
+  background: transparent;
+  padding: 6px 16px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--ds-text-dim);
+  cursor: pointer;
+}
+.ds-btn::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: -1px;
+  width: 2px;
+  background: var(--ds-amber);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.ds-btn:hover { border-color: var(--ds-amber); color: var(--ds-amber); }
+.ds-btn:hover::before { opacity: 1; }
+.ds-btn-primary {
+  border-color: var(--ds-amber);
+  color: var(--ds-amber);
+}
+.ds-btn-primary::before { opacity: 0.6; }
 
 /* Panel hover lift */
 .panel-hover { transition: border-color 0.3s ease, box-shadow 0.3s ease; }
-.panel-hover:hover { border-color: rgba(196,132,29,0.3); box-shadow: inset 0 0 30px rgba(0,0,0,0.8), 0 0 15px rgba(196,132,29,0.05); }
+.panel-hover:hover {
+  border-color: rgba(196,132,29,0.2);
+  box-shadow:
+    inset 0 0 40px rgba(0,0,0,0.9),
+    0 0 20px rgba(196,132,29,0.04);
+}
 
 /* Tab notification pulse */
 .tab-pulse { position: relative; }
@@ -143,13 +361,15 @@ button:active:not(:disabled) { transform: scale(0.97); }
   content: '';
   position: absolute;
   top: 6px; right: 4px;
-  width: 6px; height: 6px;
-  background: #c4841d;
-  border-radius: 50%;
+  width: 5px; height: 5px;
+  background: var(--ds-amber);
   animation: pulse-amber 1.5s ease-in-out infinite;
 }
 
-/* === WEATHER OVERLAYS === */
+/* ═══════════════════════════════════════
+   WEATHER OVERLAYS
+   ═══════════════════════════════════════ */
+
 .weather-overlay {
   position: fixed;
   inset: 0;
@@ -159,7 +379,6 @@ button:active:not(:disabled) { transform: scale(0.97); }
   transition: opacity 1.5s ease;
 }
 
-/* Rain */
 .weather-rain .rain-drop {
   position: absolute;
   width: 1px;
@@ -171,7 +390,6 @@ button:active:not(:disabled) { transform: scale(0.97); }
   100% { transform: translateY(100vh); }
 }
 
-/* Snow */
 .weather-snow .snow-flake {
   position: absolute;
   width: 3px; height: 3px;
@@ -184,7 +402,6 @@ button:active:not(:disabled) { transform: scale(0.97); }
   100% { transform: translateY(100vh) rotate(360deg); }
 }
 
-/* Fog */
 .weather-fog::after {
   content: '';
   position: absolute;
@@ -197,7 +414,6 @@ button:active:not(:disabled) { transform: scale(0.97); }
   50% { opacity: 1; }
 }
 
-/* Storm flash */
 .weather-storm .storm-flash {
   position: absolute;
   inset: 0;
@@ -210,7 +426,6 @@ button:active:not(:disabled) { transform: scale(0.97); }
   97% { opacity: 0.5; }
 }
 
-/* Dust (clear/hot) */
 .weather-clear .dust-mote {
   position: absolute;
   width: 2px; height: 2px;
@@ -233,18 +448,43 @@ button:active:not(:disabled) { transform: scale(0.97); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #111111; }
-::-webkit-scrollbar-thumb { background: #2a2520; }
-::-webkit-scrollbar-thumb:hover { background: #c4841d; }
+/* ═══════════════════════════════════════
+   SCROLLBAR
+   ═══════════════════════════════════════ */
 
-/* Severity colors */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--ds-bg); }
+::-webkit-scrollbar-thumb { background: var(--ds-border); }
+::-webkit-scrollbar-thumb:hover { background: var(--ds-amber); }
+
+/* ═══════════════════════════════════════
+   SEVERITY COLORS
+   ═══════════════════════════════════════ */
+
 .severity-critical { color: #a94442; }
 .severity-high { color: #d4944a; }
 .severity-medium { color: #c4841d; }
 .severity-info { color: #6b7a3d; }
 .severity-low { color: #88837a; }
+
+/* ═══════════════════════════════════════
+   GAUGE ARC (SVG-based radial gauges)
+   ═══════════════════════════════════════ */
+
+.gauge-ring {
+  fill: none;
+  stroke-linecap: butt;
+  transition: stroke-dashoffset 0.8s ease-out;
+}
+.gauge-track {
+  stroke: var(--ds-border);
+  stroke-width: 3;
+}
+.gauge-value {
+  stroke-width: 3;
+  transform-origin: center;
+  transform: rotate(-90deg);
+}
 
 @layer base {
   * { @apply border-border; }

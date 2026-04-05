@@ -92,8 +92,8 @@ export default function GridMap() {
 
   return (
     <div className="space-y-4" data-testid="grid-map-panel">
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-        <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex justify-between items-center">
+      <div className="ds-panel panel-inset noise-bg">
+        <div className="ds-panel-header flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Crosshair className="w-4 h-4 text-[#c4841d]" />
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#c4841d]">Tactical Map</h3>
@@ -291,8 +291,8 @@ export default function GridMap() {
 
       {/* Territory Summary */}
       {summary.length > 0 && (
-        <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
-          <div className="border-b border-[#2a2520] bg-[#111111] p-3">
+        <div className="ds-panel panel-inset noise-bg">
+          <div className="ds-panel-header">
             <h3 className="font-heading text-sm uppercase tracking-widest text-[#88837a]">Territory Control</h3>
           </div>
           <div className="p-3 space-y-2">

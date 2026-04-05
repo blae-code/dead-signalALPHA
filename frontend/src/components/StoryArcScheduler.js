@@ -214,7 +214,7 @@ export default function StoryArcScheduler() {
       )}
 
       {/* Arc List */}
-      <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg">
+      <div className="ds-panel panel-inset noise-bg">
         <ScrollArea className="h-[400px]">
           <div className="p-3 space-y-2">
             {arcs.length === 0 && !loading && (
