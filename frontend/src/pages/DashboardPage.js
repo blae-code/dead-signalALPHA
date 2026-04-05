@@ -19,11 +19,12 @@ import ResourceHub from '@/components/ResourceHub';
 import SurvivalPlanner from '@/components/SurvivalPlanner';
 import WeatherOverlay from '@/components/WeatherOverlay';
 import LiveStatusBar from '@/components/LiveStatusBar';
+import AIChatPanel from '@/components/AIChatPanel';
 import PushNotificationSetup from '@/components/PushNotificationSetup';
 import { useServerWebSocket } from '@/hooks/useServerWebSocket';
 import {
   Radio, Activity, Terminal, Map, Shield, LogOut, User, ChevronDown, Users, Wifi, WifiOff,
-  Swords, Crosshair, Package, Menu, X, Clock, CalendarDays, BarChart3, Bell, Layers,
+  Swords, Crosshair, Package, Menu, X, Clock, CalendarDays, BarChart3, Bell, Layers, MessageSquare,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -159,6 +160,7 @@ export default function DashboardPage({ user: propUser, onLogout }) {
     { id: 'factions', label: 'Factions', icon: <Swords className="w-3 h-3" /> },
     { id: 'economy', label: 'Economy', icon: <Package className="w-3 h-3" /> },
     { id: 'operations', label: 'Operations', icon: <Layers className="w-3 h-3" /> },
+    { id: 'sigint', label: 'SIGINT', icon: <MessageSquare className="w-3 h-3" /> },
     { id: 'alerts', label: 'Alerts', icon: <Bell className="w-3 h-3" /> },
     ...(isAdmin ? [{ id: 'gm', label: 'Game Master', icon: <Crosshair className="w-3 h-3" /> }] : []),
     ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: <Shield className="w-3 h-3" /> }] : []),
@@ -371,6 +373,12 @@ export default function DashboardPage({ user: propUser, onLogout }) {
 
           <TabsContent value="operations" className="mt-0">
             <SurvivalPlanner />
+          </TabsContent>
+
+          <TabsContent value="sigint" className="mt-0">
+            <div className="h-[calc(100vh-220px)] min-h-[500px]">
+              <AIChatPanel user={user} />
+            </div>
           </TabsContent>
 
           {isAdmin && (

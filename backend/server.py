@@ -39,6 +39,7 @@ from routes.profile import init_profile_routes
 from routes.loot_intel import init_loot_intel_routes
 from routes.planner import init_planner_routes
 from routes.meta import init_meta_routes
+from routes.ai_chat import init_ai_chat_routes
 from diplomat_ai import DiplomatAI
 from scheduler import Scheduler
 
@@ -1186,3 +1187,7 @@ app.include_router(planner_router)
 # Meta Options routes
 meta_router = init_meta_routes(db, get_current_user)
 app.include_router(meta_router)
+
+# AI Chat routes
+ai_chat_router = init_ai_chat_routes(db, get_current_user, ptero, ptero_ws, director, narrator)
+app.include_router(ai_chat_router)

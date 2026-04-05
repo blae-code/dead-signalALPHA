@@ -247,7 +247,74 @@ export default function WorldConditions({ liveWorldState }) {
             </div>
           </div>
         </div>
+
+        {/* Survival Tip */}
+        <SurvivalTip world={world} />
       </div>
+    </div>
+  );
+}
+
+function SurvivalTip({ world }) {
+  const tips = [];
+  const danger = world.danger_level || 0;
+  const weather = (world.weather || '').toLowerCase();
+  const time = (world.time_of_day || '').toLowerCase();
+  const temp = world.temperature || 15;
+  const season = (world.season || '').toLowerCase();
+
+  // Night tips
+  if (['night', 'midnight', 'dusk'].includes(time)) {
+    tips.push('Visibility severely reduced. Stay near lit areas or carry a light source.');
+    if (danger >= 6) tips.push('Night + high threat — avoid open terrain. Move between cover.');
+  }
+
+  // Weather tips
+  if (weather === 'blizzard') {
+    tips.push('Blizzard conditions. Seek shelter immediately. Hypothermia risk extreme.');
+  } else if (weather === 'storm') {
+    tips.push('Storm active. Lightning risk outdoors. Stay low, avoid metal structures.');
+  } else if (weather === 'fog') {
+    tips.push('Dense fog — visibility down to 20m. Watch for ambushes. Use sound cues.');
+  } else if (weather === 'snow' && temp < -5) {
+    tips.push('Sub-zero with snowfall. Keep moving to generate body heat. Hot drinks help.');
+  } else if (weather === 'rain') {
+    tips.push('Wet conditions slow movement. Gunshot audio masked at range. Use it tactically.');
+  }
+
+  // Temperature tips
+  if (temp < -10) {
+    tips.push(`Extreme cold (${temp}°C). Frostbite risk. Prioritize warm clothing and fire.`);
+  } else if (temp > 35) {
+    tips.push(`Heat warning (${temp}°C). Hydration critical. Stay in shade when possible.`);
+  }
+
+  // High danger
+  if (danger >= 8) {
+    tips.push('Threat level extreme. Travel in groups. Keep weapons ready. Avoid unnecessary risks.');
+  } else if (danger >= 6) {
+    tips.push('Elevated threat. Stay alert. Consider stockpiling medical supplies.');
+  }
+
+  // Season tips
+  if (season === 'winter' && tips.length === 0) {
+    tips.push('Winter conditions. Shorter days mean longer exposure to night threats.');
+  } else if (season === 'spring' && tips.length === 0) {
+    tips.push('Spring conditions. Moderate weather — good time for supply runs and base expansion.');
+  }
+
+  // Fallback
+  if (tips.length === 0) {
+    tips.push('Conditions nominal. Standard operational readiness advised.');
+  }
+
+  // Pick the most relevant tip (first is highest priority)
+  const tip = tips[0];
+
+  return (
+    <div className="border border-[#2a2520] bg-[#111111] px-3 py-2 flex items-start gap-2" data-testid="survival-tip">
+      <AlertTriangle className="w-3 h-3 text-[#c4841d] flex-shrink-0 mt-0.5" />
+      <p className="text-[10px] font-mono text-[#88837a] leading-relaxed">{tip}</p>
     </div>
   );
 }

@@ -136,6 +136,9 @@ export default function PlayerStats() {
       {/* Activity Graph */}
       <ActivityGraph history={history?.history} />
 
+      {/* Faction Standings */}
+      <FactionStandings />
+
       {/* Leaderboard */}
       <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg" data-testid="leaderboard">
         <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center justify-between">
@@ -159,6 +162,38 @@ export default function PlayerStats() {
             {lbTab === 'kd' && <LeaderboardTable data={leaderboard?.by_kd} valueKey="kd_ratio" valueLabel=" K/D" showKD={false} />}
           </div>
         </ScrollArea>
+      </div>
+    </div>
+  );
+}
+
+
+function FactionStandings() {
+  const [factions, setFactions] = useState([]);
+  useEffect(() => {
+    api.get('/factions').then(({ data }) => setFactions(data || [])).catch(() => {});
+  }, []);
+
+  if (!factions.length) return null;
+
+  const sorted = [...factions].sort((a, b) => (b.territories?.length || 0) - (a.territories?.length || 0));
+
+  return (
+    <div className="border border-[#2a2520] bg-[#1a1a1a]/95 panel-inset noise-bg" data-testid="faction-standings">
+      <div className="border-b border-[#2a2520] bg-[#111111] p-3 flex items-center gap-2">
+        <Award className="w-4 h-4 text-[#7a3d6b]" />
+        <h3 className="font-heading text-sm uppercase tracking-widest text-[#7a3d6b]">Faction Standings</h3>
+      </div>
+      <div className="p-3 space-y-1">
+        {sorted.map((f, i) => (
+          <div key={f.faction_id || i} className="flex items-center gap-3 p-2 border border-[#2a2520] bg-[#111111]/50 text-xs font-mono">
+            <span className={`w-6 text-center font-bold ${i === 0 ? 'text-[#c4841d]' : 'text-[#88837a]/60'}`}>#{i + 1}</span>
+            <div className="w-3 h-3 border" style={{ borderColor: f.color || '#88837a', backgroundColor: `${f.color || '#88837a'}33` }} />
+            <span className="text-[#d4cfc4] flex-1">[{f.tag}] {f.name}</span>
+            <span className="text-[#88837a]">{f.members?.length || 0} members</span>
+            <span className="text-[#c4841d] font-bold">{f.territories?.length || 0} zones</span>
+          </div>
+        ))}
       </div>
     </div>
   );
