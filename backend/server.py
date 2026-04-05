@@ -95,13 +95,9 @@ ALLOWED_ORIGINS = set()
 _raw_cors = os.environ.get('CORS_ORIGINS', '').strip()
 if _raw_cors:
     ALLOWED_ORIGINS = {o.strip() for o in _raw_cors.split(',') if o.strip()}
-# Always include these
-ALLOWED_ORIGINS.update([
-    'https://dead-signal.ca',
-    'https://www.dead-signal.ca',
-    'https://faction-wars-17.preview.emergentagent.com',
-    'https://faction-wars-17.emergent.host',
-])
+_backend_url = os.environ.get('BACKEND_URL', '').strip()
+if _backend_url:
+    ALLOWED_ORIGINS.add(_backend_url)
 
 @app.middleware("http")
 async def cors_middleware(request: Request, call_next):
